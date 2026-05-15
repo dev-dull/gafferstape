@@ -3,11 +3,135 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/dev-dull/gafferstape/internal/client"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// registerMetrics wires /metrics into mux. Implemented in issue #4.
 func registerMetrics(mux *http.ServeMux, snap SnapshotProvider, logger *slog.Logger) {
-	_ = mux
-	_ = snap
-	_ = logger
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		&gafCollector{snap: snap},
+	)
+	mux.Handle("GET /metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{
+		ErrorLog: slogPrintln{logger: logger},
+		Registry: reg,
+	}))
+}
+
+type slogPrintln struct{ logger *slog.Logger }
+
+func (s slogPrintln) Println(v ...interface{}) {
+	s.logger.Error("metrics handler", "msg", v)
+}
+
+type gafCollector struct {
+	snap SnapshotProvider
+}
+
+var (
+	descUp = prometheus.NewDesc(
+		"gaf_up",
+		"1 if the most recent poll succeeded, 0 otherwise.",
+		nil, nil,
+	)
+	descSessionExpires = prometheus.NewDesc(
+		"gaf_session_expires_seconds",
+		"Seconds until the Session-Token JWT expires. Negative if already expired; 0 if unknown.",
+		nil, nil,
+	)
+	descLastSample = prometheus.NewDesc(
+		"gaf_last_sample_timestamp_seconds",
+		"Unix time of the newest hourly bucket seen for this property.",
+		[]string{"property_id"}, nil,
+	)
+	descLatestHour = prometheus.NewDesc(
+		"gaf_energy_production_kwh_latest_hour",
+		"kWh produced in the most recent complete hourly bucket.",
+		[]string{"property_id", "address"}, nil,
+	)
+	descToday = prometheus.NewDesc(
+		"gaf_energy_production_kwh_today",
+		"Sum of today's hourly production buckets in kWh.",
+		[]string{"property_id", "address"}, nil,
+	)
+	descYesterday = prometheus.NewDesc(
+		"gaf_energy_production_kwh_yesterday",
+		"Previous calendar day's total production in kWh.",
+		[]string{"property_id", "address"}, nil,
+	)
+	descInverter = prometheus.NewDesc(
+		"gaf_inverter_info",
+		"Inverter hardware metadata; value is always 1.",
+		[]string{"property_id", "manufacturer", "model", "serial", "active"}, nil,
+	)
+)
+
+func (c *gafCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- descUp
+	ch <- descSessionExpires
+	ch <- descLastSample
+	ch <- descLatestHour
+	ch <- descToday
+	ch <- descYesterday
+	ch <- descInverter
+}
+
+func (c *gafCollector) Collect(ch chan<- prometheus.Metric) {
+	s := c.snap.Snapshot()
+
+	up := 0.0
+	if s.OK {
+		up = 1.0
+	}
+	ch <- prometheus.MustNewConstMetric(descUp, prometheus.GaugeValue, up)
+	ch <- prometheus.MustNewConstMetric(descSessionExpires, prometheus.GaugeValue, sessionExpiresSeconds(s.SessionExpiresAt))
+
+	for _, p := range s.Properties {
+		addr := formatAddress(p.Street, p.City, p.State)
+		ch <- prometheus.MustNewConstMetric(descLastSample, prometheus.GaugeValue, float64(p.LastSampleAt.Unix()), p.ID)
+		ch <- prometheus.MustNewConstMetric(descLatestHour, prometheus.GaugeValue, p.LatestHour.KWh, p.ID, addr)
+		ch <- prometheus.MustNewConstMetric(descToday, prometheus.GaugeValue, p.TodayKWh, p.ID, addr)
+		ch <- prometheus.MustNewConstMetric(descYesterday, prometheus.GaugeValue, p.YesterdayKWh, p.ID, addr)
+
+		if p.Inverter != (client.Inverter{}) {
+			ch <- prometheus.MustNewConstMetric(
+				descInverter,
+				prometheus.GaugeValue,
+				1,
+				p.ID,
+				p.Inverter.Manufacturer,
+				p.Inverter.ModelNumber,
+				p.Inverter.SerialNumber,
+				strconv.FormatBool(p.Inverter.IsActive),
+			)
+		}
+	}
+}
+
+func sessionExpiresSeconds(exp time.Time) float64 {
+	if exp.IsZero() {
+		return 0
+	}
+	return time.Until(exp).Seconds()
+}
+
+func formatAddress(street, city, state string) string {
+	parts := make([]string, 0, 3)
+	for _, p := range []string{street, city, state} {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) == 0 {
+		return "unknown"
+	}
+	return strings.Join(parts, ", ")
 }
