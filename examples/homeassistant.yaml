@@ -1,0 +1,26 @@
+# Home Assistant rest sensor config for gafferstape's /api/state endpoint.
+rest:
+  - resource: http://gafferstape:9876/api/state
+    scan_interval: 60
+    sensor:
+      - name: "Solar Production Today"
+        unique_id: gafferstape_today_kwh
+        unit_of_measurement: kWh
+        device_class: energy
+        state_class: total_increasing
+        value_template: "{{ value_json.properties[0].today_kwh }}"
+        availability: "{{ value_json.ok }}"
+      - name: "Solar Production Latest Hour"
+        unique_id: gafferstape_latest_hour_kwh
+        unit_of_measurement: kWh
+        device_class: energy
+        value_template: "{{ value_json.properties[0].latest_hour.kwh }}"
+        availability: >-
+          {{ value_json.ok
+             and value_json.properties[0].latest_hour is defined }}
+      - name: "Solar Production Yesterday"
+        unique_id: gafferstape_yesterday_kwh
+        unit_of_measurement: kWh
+        device_class: energy
+        value_template: "{{ value_json.properties[0].yesterday_kwh }}"
+        availability: "{{ value_json.ok }}"
