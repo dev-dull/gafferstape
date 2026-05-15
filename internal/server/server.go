@@ -1,5 +1,5 @@
-// Package server hosts the HTTP surface of gafferstape: /healthz now,
-// /metrics and /api/state arriving in later issues.
+// Package server hosts the HTTP surface of gafferstape: /healthz,
+// /metrics (issue #4), and /api/state (issue #5).
 package server
 
 import (
@@ -9,13 +9,30 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/dev-dull/gafferstape/internal/poller"
 )
+
+// SnapshotProvider is the read-side interface against the poller. The
+// server package depends on this rather than on *poller.Poller so tests
+// can substitute a fake provider that returns crafted Snapshots.
+type SnapshotProvider interface {
+	Snapshot() poller.Snapshot
+}
 
 // NewHandler builds the routing tree. Kept separate from the lifecycle
 // wrapper so tests can use httptest.NewServer without binding ports.
-func NewHandler(logger *slog.Logger) http.Handler {
+//
+// When snap is nil (e.g. /healthz-only mode with cookies unconfigured),
+// /metrics and /api/state are not registered — operators in that mode
+// get a clear 404 instead of a confusing empty/error response.
+func NewHandler(logger *slog.Logger, snap SnapshotProvider) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
+	if snap != nil {
+		registerMetrics(mux, snap, logger)
+		registerStateAPI(mux, snap, logger)
+	}
 	return mux
 }
 
@@ -30,12 +47,12 @@ type Server struct {
 	srv    *http.Server
 }
 
-func New(addr string, logger *slog.Logger) *Server {
+func New(addr string, logger *slog.Logger, snap SnapshotProvider) *Server {
 	return &Server{
 		logger: logger,
 		srv: &http.Server{
 			Addr:              addr,
-			Handler:           NewHandler(logger),
+			Handler:           NewHandler(logger, snap),
 			ReadHeaderTimeout: 5 * time.Second,
 		},
 	}

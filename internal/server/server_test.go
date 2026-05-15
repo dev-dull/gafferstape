@@ -16,7 +16,7 @@ func discardLogger() *slog.Logger {
 }
 
 func TestHealthzOK(t *testing.T) {
-	ts := httptest.NewServer(NewHandler(discardLogger()))
+	ts := httptest.NewServer(NewHandler(discardLogger(), nil))
 	t.Cleanup(ts.Close)
 
 	resp, err := http.Get(ts.URL + "/healthz")
@@ -41,7 +41,7 @@ func TestHealthzOK(t *testing.T) {
 }
 
 func TestHealthzRejectsPOST(t *testing.T) {
-	ts := httptest.NewServer(NewHandler(discardLogger()))
+	ts := httptest.NewServer(NewHandler(discardLogger(), nil))
 	t.Cleanup(ts.Close)
 
 	resp, err := http.Post(ts.URL+"/healthz", "application/json", nil)
@@ -56,7 +56,7 @@ func TestHealthzRejectsPOST(t *testing.T) {
 }
 
 func TestUnknownPath404(t *testing.T) {
-	ts := httptest.NewServer(NewHandler(discardLogger()))
+	ts := httptest.NewServer(NewHandler(discardLogger(), nil))
 	t.Cleanup(ts.Close)
 
 	resp, err := http.Get(ts.URL + "/nope")
@@ -71,7 +71,7 @@ func TestUnknownPath404(t *testing.T) {
 }
 
 func TestRunShutsDownOnContextCancel(t *testing.T) {
-	srv := New("127.0.0.1:0", discardLogger())
+	srv := New("127.0.0.1:0", discardLogger(), nil)
 	// Swap to a listener we own so we don't race on a real port.
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

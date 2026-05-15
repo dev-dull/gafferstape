@@ -72,7 +72,13 @@ func run(args []string) error {
 		return err
 	}
 
-	return runServices(ctx, pol, server.New(cfg.Listen, logger), logger)
+	// Pass the poller as the SnapshotProvider when present; nil keeps
+	// the server in /healthz-only mode (no /metrics or /api/state).
+	var snap server.SnapshotProvider
+	if pol != nil {
+		snap = pol
+	}
+	return runServices(ctx, pol, server.New(cfg.Listen, logger, snap), logger)
 }
 
 // buildPoller returns a configured poller, or (nil, nil) when cookies are
