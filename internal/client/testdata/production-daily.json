@@ -1,0 +1,23 @@
+{
+  "data": {
+    "startTimestamp": "2026-05-08T00:00:00",
+    "endTimestamp": "2026-05-14T23:43:00",
+    "timePeriod": "day",
+    "interval": "daily",
+    "unit": "kWh",
+    "timezone": "America/Los_Angeles",
+    "systemEnergy": [
+      { "date": "2026-05-08T00:00:00", "value": 12.733 },
+      { "date": "2026-05-09T00:00:00", "value": 12.96 },
+      { "date": "2026-05-10T00:00:00", "value": 12.955 },
+      { "date": "2026-05-11T00:00:00", "value": 14.285 },
+      { "date": "2026-05-12T00:00:00", "value": 11.722 },
+      { "date": "2026-05-13T00:00:00", "value": 7.487 },
+      { "date": "2026-05-14T00:00:00", "value": 5.152 }
+    ]
+  },
+  "isSuccess": true,
+  "errorMessage": null,
+  "validationErrors": null,
+  "traceId": "fixture-trace-production-daily"
+}

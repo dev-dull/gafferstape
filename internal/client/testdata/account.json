@@ -1,0 +1,46 @@
+{
+  "data": {
+    "homeOwnerInfo": {
+      "id": "HOMEOWNER-FIXTURE-1",
+      "firstName": "Test",
+      "lastName": "Homeowner",
+      "email": "homeowner@example.invalid",
+      "phoneNumber": "5550100",
+      "activatedDate": "2024-01-01T00:00:00Z",
+      "isVerificationLinkExpired": false,
+      "isEmailVerified": true,
+      "assistingAdminName": null,
+      "assistingAdminId": null,
+      "authenticationType": 0
+    },
+    "propertyInfo": {
+      "systemSize": null,
+      "inverters": [
+        {
+          "id": "INVERTER-FIXTURE-1",
+          "manufacturer": "Delta",
+          "modelNumber": "INVERTER, M6-TL-US, RGM, WIFI/CELL ENABLED",
+          "serialNumber": "FIXTURE-SERIAL-1",
+          "isActive": true
+        }
+      ],
+      "inverterRegistrationCases": [],
+      "id": "PROP-FIXTURE-1",
+      "streetAddress": "1 Example Way",
+      "city": "Example City",
+      "state": "OR",
+      "zipCode": "00000",
+      "timeZone": "America/Los_Angeles",
+      "utcOffsetInMinutes": null,
+      "aerialImagePublicUrl": null,
+      "isReadyForEnergyProductionMonitoring": true,
+      "canResumeRegistrationProcess": false,
+      "isSddcRegistrationInProgress": false,
+      "applianceIds": []
+    }
+  },
+  "isSuccess": true,
+  "errorMessage": null,
+  "validationErrors": null,
+  "traceId": "fixture-trace-account"
+}

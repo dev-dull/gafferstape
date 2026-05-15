@@ -1,0 +1,27 @@
+{
+  "data": {
+    "startTimestamp": "2026-05-14T00:00:00",
+    "endTimestamp": "2026-05-14T23:43:00",
+    "timePeriod": "day",
+    "interval": "hourly",
+    "unit": "kWh",
+    "timezone": "America/Los_Angeles",
+    "systemEnergy": [
+      { "date": "2026-05-14T06:00:00", "value": 0.062 },
+      { "date": "2026-05-14T07:00:00", "value": 0.144 },
+      { "date": "2026-05-14T08:00:00", "value": 0.233 },
+      { "date": "2026-05-14T09:00:00", "value": 0.631 },
+      { "date": "2026-05-14T10:00:00", "value": 0.879 },
+      { "date": "2026-05-14T11:00:00", "value": 0.916 },
+      { "date": "2026-05-14T12:00:00", "value": 1.36 },
+      { "date": "2026-05-14T13:00:00", "value": 0.301 },
+      { "date": "2026-05-14T14:00:00", "value": 0.232 },
+      { "date": "2026-05-14T15:00:00", "value": 0.38 },
+      { "date": "2026-05-14T16:00:00", "value": 0.014 }
+    ]
+  },
+  "isSuccess": true,
+  "errorMessage": null,
+  "validationErrors": null,
+  "traceId": "fixture-trace-production-hourly"
+}

@@ -42,11 +42,13 @@ reCAPTCHA v3 is mandatory on the login form. Automating it requires either a pai
 ```
 GET /api/energy/get-production
   ?PropertyId=<PROPERTY_ID>
-  &interval=hourly|daily|weekly|yearly
+  &interval=hourly|daily|weekly|monthly|yearly
   &startTimestamp=<ISO8601 UTC>
   &endTimestamp=<ISO8601 UTC>
   &timezone=<IANA tz>
 ```
+
+A `monthly` interval also exists (missed in the original Explore agent's notes). And a `timePeriod=lifetime` mode pairs with `interval=yearly` to return per-year totals since system install — `startTimestamp` is omitted in that mode. We don't currently expose lifetime mode in the Go client; the poller doesn't need it.
 
 Response:
 
@@ -90,9 +92,25 @@ Returns user profile plus inverter details: `manufacturer`, `model`, `serialNumb
 ## Request headers we send
 
 - `Cookie: Session-Token=...; CSRF-Token=...` — both cookies on every request.
-- `x-csrf-token: <decoded CSRF value>` — TBD whether GETs require this; the HAR shows it on writes. We'll send it on everything until tests prove we don't need to.
+- `x-csrf-token: <CSRF-Token cookie value, verbatim>` — **confirmed** from the HAR: the portal sends this header on every authenticated GET (not just writes), and its value is the same as the `CSRF-Token` cookie. No decoding required — pass it through as-is. The cookie value as stored by Firefox is already URL-encoded for chars like `+`; we send the same string for both cookie and header. The wire-format double-encoding Firefox does on the `Cookie:` header (`%2b` → `%252b`) is a quirk of cookie transmission and doesn't seem to matter to the server.
 - `User-Agent: gafferstape/<version>` — be a good citizen, identify ourselves.
 - Standard `Accept: application/json`.
+
+## Response envelope
+
+**Every** endpoint (success or failure) returns this wrapper:
+
+```json
+{
+  "data": <endpoint-specific payload, or null on failure>,
+  "isSuccess": true,
+  "errorMessage": null,
+  "validationErrors": null,
+  "traceId": "<32-hex>"
+}
+```
+
+On `isSuccess: false`, `data` is null and `errorMessage` describes the problem. Always check `isSuccess` before reading `data`. The `traceId` is useful to quote when contacting GAF support.
 
 ## Response headers worth noting
 

@@ -1,0 +1,24 @@
+{
+  "data": {
+    "properties": [
+      {
+        "id": "PROP-FIXTURE-1",
+        "streetAddress": "1 Example Way",
+        "city": "Example City",
+        "state": "OR",
+        "zipCode": "00000",
+        "timeZone": "America/Los_Angeles",
+        "utcOffsetInMinutes": null,
+        "aerialImagePublicUrl": null,
+        "isReadyForEnergyProductionMonitoring": true,
+        "canResumeRegistrationProcess": false,
+        "isSddcRegistrationInProgress": false,
+        "applianceIds": []
+      }
+    ]
+  },
+  "isSuccess": true,
+  "errorMessage": null,
+  "validationErrors": null,
+  "traceId": "fixture-trace-properties"
+}
