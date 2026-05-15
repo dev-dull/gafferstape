@@ -33,10 +33,15 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("gaf-exporter", flag.ContinueOnError)
-	configPath := fs.String("config", "", "path to YAML config file (required)")
+	configPath := fs.String("config", "", "path to YAML config file (required for normal operation)")
 	listenOverride := fs.String("listen", "", "override listen address from config (e.g. :9876)")
+	healthcheckMode := fs.Bool("healthcheck", false, "GET /healthz against --listen (default :9876) and exit 0/1 — used by the Docker HEALTHCHECK")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if *healthcheckMode {
+		return healthcheck(*listenOverride)
 	}
 
 	if *configPath == "" {

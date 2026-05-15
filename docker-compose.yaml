@@ -1,0 +1,29 @@
+services:
+  gafferstape:
+    image: gafferstape:local
+    build:
+      context: .
+      args:
+        VERSION: "${VERSION:-dev}"
+    container_name: gafferstape
+    restart: unless-stopped
+    ports:
+      - "9876:9876"
+    volumes:
+      # Read-only mount of your edited config. The example committed to
+      # the repo is config.example.yaml — copy it to config.yaml first.
+      - ./config.yaml:/etc/gafferstape/config.yaml:ro
+    environment:
+      # Cookies live in .env (gitignored). The exporter's env-var
+      # overrides (see internal/config) take precedence over the file,
+      # so config.yaml can keep the cookie fields empty.
+      GAFFERSTAPE_SESSION_TOKEN: "${GAFFERSTAPE_SESSION_TOKEN}"
+      GAFFERSTAPE_CSRF_TOKEN: "${GAFFERSTAPE_CSRF_TOKEN}"
+    healthcheck:
+      # Inherited from the Dockerfile, restated here so `docker compose
+      # ps` shows the configured interval explicitly.
+      test: ["CMD", "/gaf-exporter", "--healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3

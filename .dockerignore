@@ -1,0 +1,25 @@
+# Keep the build context small and avoid leaking secrets.
+.git
+.github
+.claude
+.vscode
+.idea
+
+# Dev artifacts
+/dist
+/coverage.out
+/coverage.html
+*.test
+
+# Secrets / capture data
+*.har
+config.yaml
+config.local*.yaml
+.env
+.env.*
+!.env.example
+
+# Docs aren't needed at build time
+docs
+examples
+*.md
