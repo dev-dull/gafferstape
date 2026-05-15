@@ -11,10 +11,6 @@ import (
 	"github.com/dev-dull/gafferstape/internal/poller"
 )
 
-type fakeSnap struct{ s poller.Snapshot }
-
-func (f *fakeSnap) Snapshot() poller.Snapshot { return f.s }
-
 func mustLoad(t *testing.T, name string) *time.Location {
 	t.Helper()
 	loc, err := time.LoadLocation(name)

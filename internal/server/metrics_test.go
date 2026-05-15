@@ -13,10 +13,6 @@ import (
 	"github.com/dev-dull/gafferstape/internal/poller"
 )
 
-type fakeSnap struct{ s poller.Snapshot }
-
-func (f *fakeSnap) Snapshot() poller.Snapshot { return f.s }
-
 func fetchMetrics(t *testing.T, snap SnapshotProvider) (int, string) {
 	t.Helper()
 	ts := httptest.NewServer(NewHandler(discardLogger(), snap))

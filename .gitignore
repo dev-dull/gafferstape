@@ -17,6 +17,9 @@ coverage.html
 *.swp
 *~
 
+# Claude Code worktrees from parallel agents
+.claude/
+
 # Secrets and capture data — never commit these
 *.har
 config.yaml
