@@ -44,6 +44,15 @@ Not yet — coming with [issue #1 (bootstrap)](https://github.com/dev-dull/gaffe
 2. `docker compose up -d`.
 3. Point Prometheus at `http://gafferstape:9876/metrics` and/or add a `rest` sensor to Home Assistant pointing at `http://gafferstape:9876/api/state`.
 
+## Home Assistant
+
+`GET /api/state` returns the poller's snapshot as JSON; see [examples/homeassistant.yaml](examples/homeassistant.yaml) for a ready-to-paste `configuration.yaml` snippet wiring it up to HA's `rest` sensor.
+
+```yaml
+# configuration.yaml
+rest: !include gafferstape.yaml  # copy of examples/homeassistant.yaml
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
