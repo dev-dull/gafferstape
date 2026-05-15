@@ -86,10 +86,10 @@ type Poller struct {
 // Op names used as the endpoint label in gaf_scrape_errors_total and as
 // the op field in retry logs.
 const (
-	opGetProperties        = "get-properties"
-	opGetAccountInfo       = "get-account-info"
-	opGetProductionHourly  = "get-production-hourly"
-	opGetProductionDaily   = "get-production-daily"
+	opGetProperties       = "get-properties"
+	opGetAccountInfo      = "get-account-info"
+	opGetProductionHourly = "get-production-hourly"
+	opGetProductionDaily  = "get-production-daily"
 )
 
 // propertyState tracks per-property data that survives across ticks but

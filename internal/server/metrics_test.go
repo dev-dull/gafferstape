@@ -215,8 +215,8 @@ func TestMetricsScrapeErrors(t *testing.T) {
 	snap := &fakeSnap{s: poller.Snapshot{
 		OK: true,
 		ScrapeErrors: map[string]int64{
-			"get-properties":         2,
-			"get-production-hourly":  7,
+			"get-properties":        2,
+			"get-production-hourly": 7,
 		},
 	}}
 	_, body := fetchMetrics(t, snap)
