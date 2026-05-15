@@ -1,0 +1,49 @@
+# GAFfersTape
+
+GAFfer's tape for your [GAF Energy](https://www.gaf.energy/) solar data — a small Go daemon that scrapes your `my.gaf.energy` portal and re-exposes the numbers in formats your tools actually speak: **Prometheus** (for Grafana) and **JSON** (for Home Assistant).
+
+> Status: design phase. Code arrives issue-by-issue — see [open issues](https://github.com/dev-dull/gafferstape/issues) for the implementation plan.
+
+## Why
+
+The `my.gaf.energy` portal shows you pretty charts and nothing else. There is no documented API, no integration, no export. GAFfersTape bridges that gap so your solar production data lands in the same dashboards as the rest of your home telemetry.
+
+## What it does
+
+- **Authenticates** to the GAF Energy customer portal using session cookies you paste in (one-time setup, refreshed every few weeks).
+- **Polls** the production endpoint on a sane interval (~15 min, matching upstream cadence).
+- **Exposes** the data in two shapes:
+  - `GET /metrics` — Prometheus text format, ready for any Prometheus server or Grafana Agent to scrape.
+  - `GET /api/state` — compact JSON snapshot, designed for Home Assistant's `rest` sensor.
+
+## Architecture at a glance
+
+```
+  ┌──────────────────┐    every 15m     ┌──────────────────┐
+  │  my.gaf.energy   │ ◄──────────────  │   gafferstape    │
+  │   (portal API)   │   session cookie │   (this repo)    │
+  └──────────────────┘                  └────────┬─────────┘
+                                                 │
+                                ┌────────────────┴────────────────┐
+                                ▼                                 ▼
+                       GET /metrics                       GET /api/state
+                       (Prometheus → Grafana)             (Home Assistant)
+```
+
+See [docs/architecture.md](docs/architecture.md) for the full design and [docs/api-notes.md](docs/api-notes.md) for what we know about the upstream API.
+
+## Why not a "real" HA integration?
+
+A custom Home Assistant integration is on the table down the line, but a single daemon that speaks both Prometheus and JSON is faster to build, easier to test, and works the same whether HA is present or not. Grafana doesn't care, HA doesn't care, and you can run it on whatever box already has Docker.
+
+## Quickstart
+
+Not yet — coming with [issue #1 (bootstrap)](https://github.com/dev-dull/gafferstape/issues). The intended flow:
+
+1. Log in to `my.gaf.energy` in Firefox, copy your `Session-Token` and `CSRF-Token` cookies into `config.yaml`.
+2. `docker compose up -d`.
+3. Point Prometheus at `http://gafferstape:9876/metrics` and/or add a `rest` sensor to Home Assistant pointing at `http://gafferstape:9876/api/state`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

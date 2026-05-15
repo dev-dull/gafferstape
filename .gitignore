@@ -1,0 +1,27 @@
+# Binaries
+/gaf-exporter
+/dist/
+*.exe
+*.test
+*.out
+
+# Go build/test artifacts
+/vendor/
+coverage.out
+coverage.html
+
+# Editor / OS cruft
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~
+
+# Secrets and capture data — never commit these
+*.har
+config.yaml
+config.local.yaml
+config.local.*.yaml
+.env
+.env.*
+!.env.example
