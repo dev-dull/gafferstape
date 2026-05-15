@@ -2,7 +2,7 @@
 
 GAFfer's tape for your [GAF Energy](https://www.gaf.energy/) solar data — a small Go daemon that scrapes your `my.gaf.energy` portal and re-exposes the numbers in formats your tools actually speak: **Prometheus** (for Grafana) and **JSON** (for Home Assistant).
 
-> Status: design phase. Code arrives issue-by-issue — see [open issues](https://github.com/dev-dull/gafferstape/issues) for the implementation plan.
+> ⚠ **Status: alpha — not yet tested end-to-end.** The daemon builds, runs, and serves the documented endpoints; it has *not* been verified against the live my.gaf.energy API with real credentials. See [docs/setup.md](docs/setup.md#status) for the full list of what has and hasn't been validated before relying on this.
 
 ## Why
 
@@ -50,7 +50,14 @@ A custom Home Assistant integration is on the table down the line, but a single 
    ```
 6. Point Prometheus at `http://localhost:9876/metrics`, or wire Home Assistant to `/api/state` using [examples/homeassistant.yaml](examples/homeassistant.yaml).
 
-Cookies expire about every 25 days. Watch `gaf_session_expires_seconds` (or the `session_expires_at` field in `/api/state`) and repeat steps 2–3 before they die. The full walkthrough lands with [issue #7](https://github.com/dev-dull/gafferstape/issues/7).
+Cookies expire about every 25 days. Watch `gaf_session_expires_seconds` (or the `session_expires_at` field in `/api/state`) and repeat steps 2–3 before they die.
+
+## Documentation
+
+- **[docs/setup.md](docs/setup.md)** — end-to-end walkthrough: cookie extraction, configuration, Prometheus and Grafana, Home Assistant, cookie rotation. Read the status callout at the top before relying on any of it.
+- **[docs/troubleshooting.md](docs/troubleshooting.md)** — common failure modes and fixes.
+- **[docs/architecture.md](docs/architecture.md)** — internal design and failure-mode table.
+- **[docs/api-notes.md](docs/api-notes.md)** — what we know about the undocumented my.gaf.energy API.
 
 ## Home Assistant
 
