@@ -53,6 +53,12 @@ type Config struct {
 	// Now is an injectable clock. Defaults to time.Now. Useful only in
 	// tests; production should leave it nil.
 	Now func() time.Time
+	// RetryMaxAttempts overrides the default 3 attempts per upstream
+	// call. Tests use 1 to skip the backoff waits entirely.
+	RetryMaxAttempts int
+	// RetryBaseBackoff overrides the default 500ms first wait between
+	// retries. Tests use 1ms to keep suites fast.
+	RetryBaseBackoff time.Duration
 }
 
 // Poller drives periodic refresh of the in-memory snapshot.
@@ -62,6 +68,7 @@ type Poller struct {
 	propertyFilter map[string]bool // nil = no filter
 	logger         *slog.Logger
 	now            func() time.Time
+	retry          retryConfig
 
 	// Loop-local state: only touched from Run/pollOnce, no lock.
 	metadataLastRefresh time.Time
@@ -70,10 +77,20 @@ type Poller struct {
 	perProperty         map[string]propertyState
 	sessionExpiresAt    time.Time
 	authFailed          bool
+	scrapeErrors        map[string]int64
 
 	mu   sync.RWMutex
 	snap Snapshot
 }
+
+// Op names used as the endpoint label in gaf_scrape_errors_total and as
+// the op field in retry logs.
+const (
+	opGetProperties        = "get-properties"
+	opGetAccountInfo       = "get-account-info"
+	opGetProductionHourly  = "get-production-hourly"
+	opGetProductionDaily   = "get-production-daily"
+)
 
 // propertyState tracks per-property data that survives across ticks but
 // isn't exposed in the public Snapshot.
@@ -130,6 +147,12 @@ func New(cfg Config) (*Poller, error) {
 		inverters:        make(map[string][]client.Inverter),
 		perProperty:      make(map[string]propertyState),
 		sessionExpiresAt: sessExp,
+		scrapeErrors:     make(map[string]int64),
+		retry: retryConfig{
+			maxAttempts: firstPositive(cfg.RetryMaxAttempts, 3),
+			base:        firstPositiveDuration(cfg.RetryBaseBackoff, 500*time.Millisecond),
+			maxBackoff:  maxDuration(interval/2, 30*time.Second),
+		},
 	}
 	p.snap.SessionExpiresAt = sessExp
 	return p, nil
@@ -143,6 +166,13 @@ func (p *Poller) Snapshot() Snapshot {
 	s := p.snap
 	if s.Properties != nil {
 		s.Properties = append([]PropertySnapshot(nil), s.Properties...)
+	}
+	if s.ScrapeErrors != nil {
+		cp := make(map[string]int64, len(s.ScrapeErrors))
+		for k, v := range s.ScrapeErrors {
+			cp[k] = v
+		}
+		s.ScrapeErrors = cp
 	}
 	return s
 }
@@ -178,6 +208,10 @@ func (p *Poller) Run(ctx context.Context) error {
 // real timers.
 func (p *Poller) pollOnce(ctx context.Context, now time.Time) {
 	started := time.Now()
+
+	if !p.checkSessionExpiry(now) {
+		return
+	}
 
 	if p.metadataLastRefresh.IsZero() || now.Sub(p.metadataLastRefresh) >= metadataMaxAge {
 		if err := p.refreshMetadata(ctx); err != nil {
@@ -230,14 +264,41 @@ func (p *Poller) pollOnce(ctx context.Context, now time.Time) {
 	)
 }
 
+// checkSessionExpiry inspects the JWT exp claim and logs accordingly.
+// Returns false (poll should NOT proceed) when the token is already
+// expired; in that case it also sets AuthFailed so Run halts cleanly.
+func (p *Poller) checkSessionExpiry(now time.Time) bool {
+	if p.sessionExpiresAt.IsZero() {
+		return true // couldn't parse JWT; nothing to enforce
+	}
+	until := p.sessionExpiresAt.Sub(now)
+	switch {
+	case until <= 0:
+		p.authFailed = true
+		p.recordTickFailure(now, fmt.Errorf("session token expired at %s; paste fresh cookies and restart", p.sessionExpiresAt.Format(time.RFC3339)))
+		return false
+	case until < 24*time.Hour:
+		p.logger.Error("session expires very soon",
+			"in", until.Round(time.Minute).String(),
+			"at", p.sessionExpiresAt.Format(time.RFC3339),
+		)
+	case until < 7*24*time.Hour:
+		p.logger.Warn("session expires soon",
+			"in", until.Round(time.Hour).String(),
+			"at", p.sessionExpiresAt.Format(time.RFC3339),
+		)
+	}
+	return true
+}
+
 func (p *Poller) refreshMetadata(ctx context.Context) error {
-	props, err := p.api.GetProperties(ctx)
+	props, err := retryAPI(ctx, p, opGetProperties, p.api.GetProperties)
 	if err != nil {
 		return fmt.Errorf("get properties: %w", err)
 	}
 	p.propertyMeta = props
 
-	acc, err := p.api.GetAccountInfo(ctx)
+	acc, err := retryAPI(ctx, p, opGetAccountInfo, p.api.GetAccountInfo)
 	if err != nil {
 		return fmt.Errorf("get account info: %w", err)
 	}
@@ -260,7 +321,9 @@ func (p *Poller) pollProperty(ctx context.Context, prop client.Property, now tim
 	todayLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc)
 	todayKey := todayLocal.Format("2006-01-02")
 
-	hourly, err := p.api.GetProduction(ctx, prop.ID, client.IntervalHourly, todayLocal, now, prop.TimeZone)
+	hourly, err := retryAPI(ctx, p, opGetProductionHourly, func(c context.Context) (client.Production, error) {
+		return p.api.GetProduction(c, prop.ID, client.IntervalHourly, todayLocal, now, prop.TimeZone)
+	})
 	if err != nil {
 		return PropertySnapshot{}, fmt.Errorf("get hourly production: %w", err)
 	}
@@ -294,7 +357,9 @@ func (p *Poller) pollProperty(ctx context.Context, prop client.Property, now tim
 	yesterdayKWh := prev.YesterdayKWh
 	if needYesterday {
 		yest := todayLocal.AddDate(0, 0, -1)
-		daily, err := p.api.GetProduction(ctx, prop.ID, client.IntervalDaily, yest, todayLocal, prop.TimeZone)
+		daily, err := retryAPI(ctx, p, opGetProductionDaily, func(c context.Context) (client.Production, error) {
+			return p.api.GetProduction(c, prop.ID, client.IntervalDaily, yest, todayLocal, prop.TimeZone)
+		})
 		if err != nil {
 			// Don't fail the whole tick for a yesterday fetch — log
 			// and reuse whatever we had.
@@ -328,6 +393,7 @@ func (p *Poller) recordTickResult(now time.Time, props []PropertySnapshot, tickE
 	p.snap.Properties = props
 	p.snap.SessionExpiresAt = p.sessionExpiresAt
 	p.snap.AuthFailed = p.authFailed
+	p.snap.ScrapeErrors = copyErrorCounts(p.scrapeErrors)
 	if tickErr != nil {
 		p.snap.OK = false
 		p.snap.LastError = tickErr.Error()
@@ -349,5 +415,17 @@ func (p *Poller) recordTickFailure(now time.Time, err error) {
 	p.snap.LastError = err.Error()
 	p.snap.SessionExpiresAt = p.sessionExpiresAt
 	p.snap.AuthFailed = p.authFailed
+	p.snap.ScrapeErrors = copyErrorCounts(p.scrapeErrors)
 	p.logger.Error("poll tick failed", "err", err)
+}
+
+func copyErrorCounts(in map[string]int64) map[string]int64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

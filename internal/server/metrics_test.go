@@ -211,6 +211,26 @@ func TestMetricsIncludesStandardCollectors(t *testing.T) {
 	mustContain(t, body, "process_")
 }
 
+func TestMetricsScrapeErrors(t *testing.T) {
+	snap := &fakeSnap{s: poller.Snapshot{
+		OK: true,
+		ScrapeErrors: map[string]int64{
+			"get-properties":         2,
+			"get-production-hourly":  7,
+		},
+	}}
+	_, body := fetchMetrics(t, snap)
+	mustContain(t, body, `gaf_scrape_errors_total{endpoint="get-properties"} 2`)
+	mustContain(t, body, `gaf_scrape_errors_total{endpoint="get-production-hourly"} 7`)
+}
+
+func TestMetricsScrapeErrorsAbsentWhenEmpty(t *testing.T) {
+	snap := &fakeSnap{s: poller.Snapshot{OK: true}}
+	_, body := fetchMetrics(t, snap)
+	// No series should be emitted when nothing has failed yet.
+	mustNotContain(t, body, "gaf_scrape_errors_total{")
+}
+
 func findMetricLine(t *testing.T, body, prefix string) string {
 	t.Helper()
 	for _, line := range strings.Split(body, "\n") {

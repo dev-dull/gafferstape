@@ -119,26 +119,7 @@ For a panel of type "Time series" or "Stat":
 
 For multi-property accounts, every per-property metric carries `property_id` and `address` labels; break out by `property_id` to graph each system separately. Inverter make/model can be joined via `gaf_inverter_info`.
 
-A starter alerting bundle (drop into your existing rules file; a polished version lands with [#8](https://github.com/dev-dull/gafferstape/issues/8)):
-
-```yaml
-groups:
-  - name: gafferstape
-    rules:
-      - alert: GafferstapeSessionExpiringSoon
-        expr: gaf_session_expires_seconds < 86400 * 3
-        labels: { severity: warning }
-        annotations:
-          summary: "Gafferstape cookies expire in <3 days"
-          description: "Refresh per docs/setup.md and redeploy."
-
-      - alert: GafferstapeDown
-        expr: gaf_up == 0
-        for: 10m
-        labels: { severity: warning }
-        annotations:
-          summary: "Gafferstape can't fetch from my.gaf.energy"
-```
+A ready-to-paste alerting bundle ships at [examples/alerts.yaml](../examples/alerts.yaml). Drop it into your Prometheus `rule_files:` directive. It defines four alerts: `GafferstapeDown` (polling unhealthy for 10m), `GafferstapeSessionExpiringSoon` (<3 days), `GafferstapeSessionExpired` (already dead), and `GafferstapeUpstreamErrors` (sustained churn after retries — points at a real problem the retry helper is masking).
 
 ## 6. Wire up Home Assistant
 

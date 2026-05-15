@@ -1,0 +1,55 @@
+# Prometheus alerting rules for gafferstape.
+# Drop into your Prometheus rule_files: directive.
+
+groups:
+  - name: gafferstape
+    rules:
+      # Polling is unhealthy. Almost always: cookies expired or the
+      # upstream API is having a bad day.
+      - alert: GafferstapeDown
+        expr: gaf_up == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "gafferstape exporter is reporting unhealthy"
+          description: |
+            gaf_up has been 0 for at least 10 minutes. Check the daemon logs
+            and confirm the cookies haven't expired. See docs/troubleshooting.md.
+
+      # Session JWT will expire within 3 days. Plenty of headroom to
+      # re-do the Firefox cookie copy without rushing.
+      - alert: GafferstapeSessionExpiringSoon
+        expr: gaf_session_expires_seconds > 0 and gaf_session_expires_seconds < 86400 * 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "gafferstape cookies expire in <3 days"
+          description: |
+            Rotate cookies per docs/setup.md before the JWT dies. Current
+            value: {{ humanizeDuration $value }}.
+
+      # Session JWT has expired (or the daemon never managed to parse one).
+      # Polling has halted; alert fires immediately.
+      - alert: GafferstapeSessionExpired
+        expr: gaf_session_expires_seconds <= 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "gafferstape session token has expired"
+          description: |
+            Polling has halted. Rotate cookies and restart the container.
+
+      # Sustained upstream churn. If we're hitting >5 errors/min for the
+      # same endpoint over 15m, the retry logic isn't covering for a
+      # real problem and someone should look.
+      - alert: GafferstapeUpstreamErrors
+        expr: sum by (endpoint) (rate(gaf_scrape_errors_total[5m])) > 5/60
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "gafferstape: sustained upstream errors on {{ $labels.endpoint }}"
+          description: |
+            {{ $labels.endpoint }} has averaged >5 errors/min for 15 minutes.
+            Retries are masking a real problem; check daemon logs.

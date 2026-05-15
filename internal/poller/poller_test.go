@@ -1,6 +1,7 @@
 package poller
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -188,10 +189,12 @@ func newFake() *fakeAPI {
 func newTestPoller(t *testing.T, api *fakeAPI, mod func(*Config)) *Poller {
 	t.Helper()
 	cfg := Config{
-		API:          api,
-		Interval:     time.Minute,
-		SessionToken: makeJWT(t, time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)),
-		Logger:       discardLogger(),
+		API:              api,
+		Interval:         time.Minute,
+		SessionToken:     makeJWT(t, time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)),
+		Logger:           discardLogger(),
+		RetryMaxAttempts: 1, // tests that want retries opt in via mod
+		RetryBaseBackoff: time.Millisecond,
 	}
 	if mod != nil {
 		mod(&cfg)
@@ -574,6 +577,205 @@ func TestSnapshotIsIndependent(t *testing.T) {
 	}
 	if snap2.LastError == "tampered" {
 		t.Error("LastError mutated externally")
+	}
+}
+
+// ---------- Retry ----------
+
+func TestRetrySucceedsAfterTransientFailure(t *testing.T) {
+	api := newFake()
+	failsLeft := 2
+	api.productionFunc = func(_ string, interval client.Interval, _, _ time.Time, _ string) (client.Production, error) {
+		if interval == client.IntervalHourly && failsLeft > 0 {
+			failsLeft--
+			return client.Production{}, errors.New("transient 503")
+		}
+		return defaultProductionFunc("", interval, time.Time{}, time.Time{}, "")
+	}
+	p := newTestPoller(t, api, func(c *Config) {
+		c.RetryMaxAttempts = 3
+		c.RetryBaseBackoff = time.Millisecond
+	})
+
+	p.pollOnce(context.Background(), time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC))
+
+	if !p.Snapshot().OK {
+		t.Errorf("OK = false after successful retry; LastError = %q", p.Snapshot().LastError)
+	}
+	// Hourly was called 3 times (2 failures + 1 success).
+	if got := api.countProduction(client.IntervalHourly); got != 3 {
+		t.Errorf("hourly calls = %d, want 3 (2 retries + success)", got)
+	}
+	// And scrape errors counter reflects the 2 retried failures.
+	if got := p.Snapshot().ScrapeErrors[opGetProductionHourly]; got != 2 {
+		t.Errorf("scrape_errors[hourly] = %d, want 2", got)
+	}
+}
+
+func TestRetryExhaustionFailsTick(t *testing.T) {
+	api := newFake()
+	api.productionFunc = func(_ string, interval client.Interval, _, _ time.Time, _ string) (client.Production, error) {
+		if interval == client.IntervalHourly {
+			return client.Production{}, errors.New("persistent 503")
+		}
+		return client.Production{}, nil
+	}
+	p := newTestPoller(t, api, func(c *Config) {
+		c.RetryMaxAttempts = 3
+		c.RetryBaseBackoff = time.Millisecond
+	})
+
+	p.pollOnce(context.Background(), time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC))
+
+	snap := p.Snapshot()
+	if snap.OK {
+		t.Error("OK = true after exhausted retries")
+	}
+	if got := api.countProduction(client.IntervalHourly); got != 3 {
+		t.Errorf("hourly calls = %d, want 3 (max attempts)", got)
+	}
+	if got := snap.ScrapeErrors[opGetProductionHourly]; got != 3 {
+		t.Errorf("scrape_errors[hourly] = %d, want 3", got)
+	}
+}
+
+func TestRetrySkippedOnAuthError(t *testing.T) {
+	api := newFake()
+	api.productionFunc = func(_ string, _ client.Interval, _, _ time.Time, _ string) (client.Production, error) {
+		return client.Production{}, &client.AuthError{StatusCode: 401, URL: "/api/energy/get-production"}
+	}
+	p := newTestPoller(t, api, func(c *Config) {
+		c.RetryMaxAttempts = 5 // would be 5 if we retried; we shouldn't
+		c.RetryBaseBackoff = time.Millisecond
+	})
+
+	p.pollOnce(context.Background(), time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC))
+
+	if got := api.countProduction(client.IntervalHourly); got != 1 {
+		t.Errorf("hourly calls = %d, want 1 (AuthError must not be retried)", got)
+	}
+	if !p.Snapshot().AuthFailed {
+		t.Error("AuthFailed = false; AuthError should halt the poller")
+	}
+}
+
+func TestRetryRespectsContextCancellation(t *testing.T) {
+	api := newFake()
+	api.productionFunc = func(_ string, _ client.Interval, _, _ time.Time, _ string) (client.Production, error) {
+		return client.Production{}, errors.New("transient")
+	}
+	p := newTestPoller(t, api, func(c *Config) {
+		c.RetryMaxAttempts = 5
+		c.RetryBaseBackoff = 200 * time.Millisecond
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	p.pollOnce(ctx, time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC))
+	elapsed := time.Since(start)
+
+	// With backoff sequence 200ms, 400ms, 800ms, 1.6s and 5 attempts,
+	// the full retry chain would take well over a second. Cancelling
+	// mid-flight should cut this short.
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("pollOnce took %s; ctx cancellation should have aborted retries faster", elapsed)
+	}
+}
+
+// ---------- Session expiry ----------
+
+func TestSessionExpiryWarnsBelow7Days(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	now := time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC)
+	api := newFake()
+	p := newTestPoller(t, api, func(c *Config) {
+		c.Logger = logger
+		c.SessionToken = makeJWT(t, now.Add(5*24*time.Hour)) // 5 days out
+	})
+	p.pollOnce(context.Background(), now)
+
+	out := buf.String()
+	if !strings.Contains(out, `"level":"WARN"`) || !strings.Contains(out, "session expires soon") {
+		t.Errorf("expected WARN \"session expires soon\" in logs; got:\n%s", out)
+	}
+}
+
+func TestSessionExpiryErrorsBelow24h(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	now := time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC)
+	api := newFake()
+	p := newTestPoller(t, api, func(c *Config) {
+		c.Logger = logger
+		c.SessionToken = makeJWT(t, now.Add(6*time.Hour)) // 6h out
+	})
+	p.pollOnce(context.Background(), now)
+
+	out := buf.String()
+	if !strings.Contains(out, `"level":"ERROR"`) || !strings.Contains(out, "session expires very soon") {
+		t.Errorf("expected ERROR \"session expires very soon\" in logs; got:\n%s", out)
+	}
+	// Poll should still proceed.
+	if !p.Snapshot().OK {
+		t.Errorf("OK = false despite token still valid; LastError = %q", p.Snapshot().LastError)
+	}
+}
+
+func TestSessionExpiredHaltsPolling(t *testing.T) {
+	now := time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC)
+	api := newFake()
+	p := newTestPoller(t, api, func(c *Config) {
+		c.SessionToken = makeJWT(t, now.Add(-time.Hour)) // already expired
+	})
+	p.pollOnce(context.Background(), now)
+
+	snap := p.Snapshot()
+	if !snap.AuthFailed {
+		t.Error("AuthFailed = false; expired token should halt the poller")
+	}
+	if snap.OK {
+		t.Error("OK = true after expired session")
+	}
+	if !strings.Contains(snap.LastError, "expired") {
+		t.Errorf("LastError = %q, want it to mention expiry", snap.LastError)
+	}
+	// Upstream should not have been called at all.
+	if got := api.count("GetProperties"); got != 0 {
+		t.Errorf("GetProperties called %d times; expired session must skip the upstream entirely", got)
+	}
+}
+
+func TestSnapshotIncludesScrapeErrors(t *testing.T) {
+	api := newFake()
+	api.productionFunc = func(_ string, interval client.Interval, _, _ time.Time, _ string) (client.Production, error) {
+		if interval == client.IntervalHourly {
+			return client.Production{}, errors.New("transient")
+		}
+		return client.Production{}, nil
+	}
+	p := newTestPoller(t, api, func(c *Config) {
+		c.RetryMaxAttempts = 2
+		c.RetryBaseBackoff = time.Millisecond
+	})
+	p.pollOnce(context.Background(), time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC))
+
+	se := p.Snapshot().ScrapeErrors
+	if se == nil {
+		t.Fatal("ScrapeErrors map is nil")
+	}
+	if got := se[opGetProductionHourly]; got != 2 {
+		t.Errorf("ScrapeErrors[hourly] = %d, want 2", got)
+	}
+	// Other ops should be absent (no errors).
+	if _, ok := se[opGetProperties]; ok {
+		t.Errorf("ScrapeErrors should not include successful ops; got entry for %q", opGetProperties)
 	}
 }
 

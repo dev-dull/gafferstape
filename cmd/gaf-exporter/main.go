@@ -25,13 +25,18 @@ import (
 var version = "0.1.0-dev"
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
+// run is the testable entry point. Pass an already-set-up signal context
+// from main, or a manually controlled context from tests that want to
+// drive shutdown without OS signals.
+func run(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("gaf-exporter", flag.ContinueOnError)
 	configPath := fs.String("config", "", "path to YAML config file (required for normal operation)")
 	listenOverride := fs.String("listen", "", "override listen address from config (e.g. :9876)")
@@ -68,9 +73,6 @@ func run(args []string) error {
 		"log_level", cfg.LogLevel,
 		"properties_pinned", len(cfg.Properties),
 	)
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	pol, err := buildPoller(cfg, logger)
 	if err != nil {

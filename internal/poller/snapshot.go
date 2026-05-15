@@ -28,6 +28,12 @@ type Snapshot struct {
 	// Properties holds per-property data for everything we successfully
 	// polled this tick. May be empty after a metadata-refresh failure.
 	Properties []PropertySnapshot
+	// ScrapeErrors counts every upstream failure (including those that
+	// were subsequently retried successfully) since startup, keyed by
+	// the internal op name — "get-properties", "get-account-info",
+	// "get-production-hourly", "get-production-daily". The metrics
+	// collector emits this as gaf_scrape_errors_total{endpoint=...}.
+	ScrapeErrors map[string]int64
 }
 
 // PropertySnapshot is the cached data for one property.

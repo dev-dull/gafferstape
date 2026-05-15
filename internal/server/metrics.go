@@ -72,6 +72,11 @@ var (
 		"Inverter hardware metadata; value is always 1.",
 		[]string{"property_id", "manufacturer", "model", "serial", "active"}, nil,
 	)
+	descScrapeErrors = prometheus.NewDesc(
+		"gaf_scrape_errors_total",
+		"Cumulative count of upstream call failures since startup, including those subsequently retried successfully.",
+		[]string{"endpoint"}, nil,
+	)
 )
 
 func (c *gafCollector) Describe(ch chan<- *prometheus.Desc) {
@@ -82,6 +87,7 @@ func (c *gafCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descToday
 	ch <- descYesterday
 	ch <- descInverter
+	ch <- descScrapeErrors
 }
 
 func (c *gafCollector) Collect(ch chan<- prometheus.Metric) {
@@ -113,6 +119,10 @@ func (c *gafCollector) Collect(ch chan<- prometheus.Metric) {
 				strconv.FormatBool(p.Inverter.IsActive),
 			)
 		}
+	}
+
+	for endpoint, count := range s.ScrapeErrors {
+		ch <- prometheus.MustNewConstMetric(descScrapeErrors, prometheus.CounterValue, float64(count), endpoint)
 	}
 }
 
