@@ -123,4 +123,4 @@ Multi-stage build: `golang:1.23-alpine` to compile, `gcr.io/distroless/static:no
 | JWT expiring soon | `exp` claim < 7d | Log warn each poll; `gaf_session_expires_seconds` exposes it for alerting. |
 | JWT already expired | `exp` claim in past | `gaf_up=0`, refuse to poll, log loud. |
 | Network timeout | Context deadline | Same as 5xx. |
-| Config missing cookies | Startup check | Refuse to start with a clear error. |
+| Config missing cookies | Startup check | Log warning; run in /healthz-only mode (poller disabled). Lets ops verify the deployment before adding credentials. |
