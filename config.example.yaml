@@ -1,0 +1,27 @@
+# GAFfersTape config — copy to config.yaml and edit.
+# config.yaml is gitignored; this file is the committed template.
+
+# HTTP listen address for /metrics, /api/state, and /healthz.
+listen: ":9876"
+
+# How often to poll my.gaf.energy. The upstream API updates roughly
+# hourly, so polling below 15m mostly burns requests for nothing.
+poll_interval: 15m
+
+# Log verbosity: debug | info | warn | error.
+log_level: info
+
+# Session cookies copied from a Firefox login session.
+# Leaving these blank is fine at bootstrap (issue #1) — the daemon will
+# serve /healthz happily. Once the poller lands (issue #3) you'll need
+# real values here, or set them via env:
+#   GAFFERSTAPE_SESSION_TOKEN
+#   GAFFERSTAPE_CSRF_TOKEN
+# Env vars win over the file, so Docker users can keep secrets out of
+# the mounted config entirely.
+session_token: ""
+csrf_token: ""
+
+# Optional: pin specific Salesforce property IDs. If empty, all
+# properties on the account are auto-discovered at startup.
+properties: []
