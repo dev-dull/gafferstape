@@ -138,16 +138,48 @@ It exposes three sensors:
 
 All three are marked `unavailable` when the daemon's `ok` field is false (e.g. during cookie expiry), so HA's history graphs gap honestly instead of charting a flat zero.
 
-## 7. Rotating cookies
+## 7. Cookie lifetime and rotation
 
-About every three weeks you'll need to repeat [§1](#1-capture-the-session-cookies). Then:
+### How long the cookies last
+
+Empirically, the GAF backend mints a JWT with **`exp ≈ login_time + 25 days`** each time the user goes through the email/password form. There is no refresh-token endpoint we've found, and the JWT does not extend with use — once `exp` passes, the daemon halts polling and `gaf_up` drops to 0.
+
+This number comes from two observed sessions, not from any documented GAF policy. The lifetime can change at any time. Trust `gaf_session_expires_seconds` over any human assumption.
+
+### The "fresh login" gotcha
+
+The clock starts from when the user **logged in**, not from when they pasted the cookies. If Firefox has been keeping a session alive in the background for the past three weeks, the JWT only has a few days left — even if it was copied 30 seconds ago.
+
+To get the full ~25 days per rotation:
+
+1. **Sign out** of `my.gaf.energy` (kills the current session)
+2. **Sign back in** with email + password
+3. *Immediately* grab the cookies (Storage panel or Network tab, see [§1](#1-capture-the-session-cookies))
+4. Paste into `.env`, `docker compose up -d`
+
+### What the daemon does as expiry approaches
+
+| Window remaining | Daemon behaviour |
+| --- | --- |
+| > 7 days | Silent. `gaf_session_expires_seconds` exposed for graphing. |
+| 7 days → 24 h | `WARN session expires soon` on every poll (~96/day at default interval). |
+| 24 h → 0 | `ERROR session expires very soon` on every poll. |
+| 0 (expired) | `ERROR session is no longer authenticated; halting poller`. `gaf_up=0`. The server keeps `/healthz` healthy so the container stays up and observable. |
+
+[`examples/alerts.yaml`](../examples/alerts.yaml) fires `GafferstapeSessionExpiringSoon` at <3 days, which gives ample lead time to rotate without rushing.
+
+### Rotation command
 
 ```sh
-$EDITOR .env                  # paste the fresh values
+$EDITOR .env                  # paste the fresh values from a fresh login
 docker compose up -d          # recreates the container with the new env
 ```
 
-The `GafferstapeSessionExpiringSoon` alert from [§5](#5-grafana--promql-starter-queries) should fire 3 days before the JWT dies, so the rotation isn't a surprise.
+That's it. No data loss — Prometheus and Home Assistant pick back up the moment polling resumes.
+
+### Server-side policies we don't control
+
+GAF's backend may invalidate sessions earlier than `exp` for any reason — password change on another device, prolonged inactivity, IP shift, manual revoke from a different browser. None of these are documented, and the daemon will simply start seeing 401s if it happens. The fix in every case is "sign in again, repaste."
 
 ## Found a bug?
 
