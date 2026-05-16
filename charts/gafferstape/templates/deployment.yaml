@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gafferstape.fullname" . }}
+  labels:
+    {{- include "gafferstape.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gafferstape.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Restart the pod when the rendered config changes — without
+        # this, ConfigMap-driven settings (poll_interval, etc.) only
+        # update after a manual `kubectl rollout restart`.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.reloader.enabled }}
+        # stakater/reloader: when the referenced ConfigMap or Secret
+        # changes, the controller auto-triggers a rollout. Harmless if
+        # reloader isn't installed.
+        reloader.stakater.com/auto: "true"
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "gafferstape.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "gafferstape.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gafferstape
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--config"
+            - "/etc/gafferstape/config.yaml"
+          ports:
+            - name: http
+              containerPort: 9876
+              protocol: TCP
+          env:
+            - name: GAFFERSTAPE_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gafferstape.secretName" . }}
+                  key: session-token
+            - name: GAFFERSTAPE_CSRF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gafferstape.secretName" . }}
+                  key: csrf-token
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/gafferstape
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gafferstape.fullname" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -45,3 +45,49 @@ jobs:
 
       - name: docker build
         run: docker build --build-arg VERSION=ci -t gafferstape:ci .
+
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: helm lint
+        run: helm lint charts/gafferstape
+
+      - name: helm template (defaults)
+        run: helm template gaf charts/gafferstape > /tmp/render-defaults.yaml
+
+      - name: helm template (existing Secret)
+        run: |
+          helm template gaf charts/gafferstape \
+            --set tokens.existingSecret=my-cookies \
+            > /tmp/render-existing.yaml
+
+      - name: helm template (ServiceMonitor + chart-rendered Secret)
+        run: |
+          helm template gaf charts/gafferstape \
+            --set serviceMonitor.enabled=true \
+            --set tokens.create=true \
+            --set tokens.session=mock-jwt \
+            --set tokens.csrf=mock-csrf \
+            > /tmp/render-sm.yaml
+
+      # ServiceMonitor is a CRD outside the core schemas; ignore
+      # missing-schema errors for it while still catching schema
+      # errors in the core kinds (Deployment, Service, ConfigMap, etc).
+      - name: kubeconform on all rendered manifests
+        run: |
+          kubeconform -strict -ignore-missing-schemas -summary \
+            /tmp/render-defaults.yaml \
+            /tmp/render-existing.yaml \
+            /tmp/render-sm.yaml

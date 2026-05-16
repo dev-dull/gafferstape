@@ -1,0 +1,51 @@
+gafferstape v{{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
+
+Service:
+  {{ include "gafferstape.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Endpoints (port {{ .Values.service.port }}):
+  /healthz     — kubelet liveness + readiness probes
+  /metrics     — Prometheus scrape target
+  /api/state   — Home Assistant rest sensor
+
+{{- if .Values.serviceMonitor.enabled }}
+
+A ServiceMonitor has been created; the Prometheus Operator
+(kube-prometheus-stack) will discover it automatically.
+{{- else }}
+
+To have kube-prometheus-stack scrape this:
+  helm upgrade {{ .Release.Name }} <chart> \
+    --reuse-values --set serviceMonitor.enabled=true
+{{- end }}
+
+{{- if and .Values.tokens.create (not .Values.tokens.existingSecret) }}
+
+WARNING: tokens.create is true. The session cookies are stored in the
+Helm release history (visible via `helm get values --all`). For
+production, create the Secret outside Helm and set tokens.existingSecret.
+{{- end }}
+
+To rotate cookies (every ~25 days):
+
+  1. Capture fresh values from a Firefox login at https://my.gaf.energy
+     — see docs/setup.md §1 in the repo for the steps.
+
+  2. Update the Secret:
+
+       kubectl create secret generic {{ include "gafferstape.secretName" . }} \
+         --namespace {{ .Release.Namespace }} \
+         --from-literal=session-token=NEW_SESSION_JWT \
+         --from-literal=csrf-token=NEW_CSRF_VALUE \
+         --dry-run=client -o yaml | kubectl apply -f -
+
+  3. Restart the deployment so the new env vars are picked up:
+
+       kubectl rollout restart deployment/{{ include "gafferstape.fullname" . }} \
+         --namespace {{ .Release.Namespace }}
+
+The Prometheus alert `GafferstapeSessionExpiringSoon` (in
+examples/alerts.yaml) fires 3 days before expiry as a reminder.
+
+Set `reloader.enabled=true` to have stakater/reloader (if installed)
+trigger the rollout automatically on Secret changes — skipping step 3.

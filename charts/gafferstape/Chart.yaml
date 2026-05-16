@@ -1,0 +1,20 @@
+apiVersion: v2
+name: gafferstape
+description: |
+  GAFfersTape — Prometheus exporter + Home Assistant JSON endpoint
+  for GAF Energy solar production data.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/dev-dull/gafferstape
+sources:
+  - https://github.com/dev-dull/gafferstape
+maintainers:
+  - name: dev-dull
+keywords:
+  - solar
+  - gaf-energy
+  - prometheus
+  - exporter
+  - home-assistant
+  - monitoring

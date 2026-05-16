@@ -53,6 +53,23 @@ The image is published to GHCR at `ghcr.io/dev-dull/gafferstape` — by default 
 
 Cookies expire about every 25 days. Watch `gaf_session_expires_at_timestamp_seconds` (Grafana renders it as a date) or the `session_expires_at` field in `/api/state`, and edit `config.yaml` before they die.
 
+## Kubernetes (Helm)
+
+A Helm chart ships at [`charts/gafferstape/`](charts/gafferstape/) for cluster installs:
+
+```sh
+kubectl create secret generic gafferstape-cookies \
+  --namespace gafferstape \
+  --from-literal=session-token='eyJ...' \
+  --from-literal=csrf-token='waHJ...'
+
+helm install gafferstape ./charts/gafferstape \
+  --namespace gafferstape --create-namespace \
+  --set tokens.existingSecret=gafferstape-cookies
+```
+
+Full values reference, ServiceMonitor support, and rotation procedure: [charts/gafferstape/README.md](charts/gafferstape/README.md).
+
 ## Documentation
 
 - **[docs/setup.md](docs/setup.md)** — end-to-end walkthrough: cookie extraction, configuration, Prometheus and Grafana, Home Assistant, cookie rotation. Read the status callout at the top before relying on any of it.

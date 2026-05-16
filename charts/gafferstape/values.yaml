@@ -1,0 +1,107 @@
+## Default values for gafferstape.
+
+image:
+  repository: ghcr.io/dev-dull/gafferstape
+  # tag is .Chart.AppVersion unless overridden here.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+## replicaCount > 1 makes N pods authenticate with the same single-session
+## cookies and hit the upstream API in parallel. Almost never what you want
+## — keep at 1 unless you specifically need failover and are OK with the
+## duplicate-request behaviour.
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  annotations: {}
+  ## Auto-generated from the release name if empty.
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532   # matches gcr.io/distroless/static:nonroot
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+## Sensible starting values — tune after observing real usage.
+## The daemon is one Go process polling every ~15 minutes; it's cheap.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+service:
+  type: ClusterIP
+  port: 9876
+
+## ServiceMonitor for kube-prometheus-stack. Disabled by default because
+## not every cluster has the Prometheus Operator CRDs installed.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  ## Extra labels to apply to the ServiceMonitor — typically the operator
+  ## release name, e.g. `release: kube-prometheus-stack`.
+  labels: {}
+
+## Daemon behaviour. Rendered into the ConfigMap as config.yaml.
+config:
+  listen: ":9876"
+  pollInterval: "15m"
+  logLevel: "info"
+  ## Empty list = auto-discover all properties on the account.
+  properties: []
+
+## Session cookies. Two modes:
+##
+##   tokens.create: true
+##     Chart renders a Secret from tokens.session / tokens.csrf.
+##     Convenient for dev/staging; the values land in the Helm release
+##     history (`helm get values --all`) so this is NOT recommended for
+##     production.
+##
+##   tokens.existingSecret: <name>
+##     Chart references an existing Secret in the release namespace.
+##     The Secret must have keys named `session-token` and `csrf-token`.
+##     Recommended for production — keeps credentials out of the chart
+##     and Helm history. Create with:
+##
+##       kubectl create secret generic <name> \
+##         --from-literal=session-token=eyJ... \
+##         --from-literal=csrf-token=waHJ...
+##
+## When both are set, existingSecret wins (and tokens.create is a no-op).
+tokens:
+  create: false
+  session: ""
+  csrf: ""
+  existingSecret: ""
+
+## When true, adds the stakater/reloader annotation so a Secret update
+## auto-triggers a rollout restart. Requires stakater/reloader installed
+## in the cluster; otherwise harmless (annotation is just ignored).
+reloader:
+  enabled: false

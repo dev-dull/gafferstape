@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gafferstape.fullname" . }}
+  labels:
+    {{- include "gafferstape.labels" . | nindent 4 }}
+data:
+  # Token fields are intentionally empty here — they come from the
+  # Secret via env vars (see Deployment). Keeping config.yaml
+  # secret-free makes ConfigMap-vs-Secret separation obvious in
+  # cluster audits.
+  config.yaml: |
+    listen: {{ .Values.config.listen | quote }}
+    poll_interval: {{ .Values.config.pollInterval | quote }}
+    log_level: {{ .Values.config.logLevel | quote }}
+    session_token: ""
+    csrf_token: ""
+    properties:
+      {{- if .Values.config.properties }}
+      {{- range .Values.config.properties }}
+      - {{ . | quote }}
+      {{- end }}
+      {{- else }} []
+      {{- end }}
