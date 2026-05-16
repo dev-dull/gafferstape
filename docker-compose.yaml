@@ -1,6 +1,11 @@
 services:
   gafferstape:
-    image: gafferstape:local
+    # Default to the published multi-arch image. To build from source
+    # instead — useful when you're hacking on the code in this repo —
+    # run: docker compose up -d --build
+    # That rebuilds locally and overwrites the same tag with your
+    # working-tree changes.
+    image: ghcr.io/dev-dull/gafferstape:latest
     build:
       context: .
       args:
@@ -12,13 +17,16 @@ services:
     volumes:
       # Read-only mount of your edited config. The example committed to
       # the repo is config.example.yaml — copy it to config.yaml first.
+      # The daemon re-reads token fields from this file on every
+      # upstream request, so editing here picks up new cookies without
+      # a container restart.
       - ./config.yaml:/etc/gafferstape/config.yaml:ro
     environment:
-      # Cookies live in .env (gitignored). The exporter's env-var
-      # overrides (see internal/config) take precedence over the file,
-      # so config.yaml can keep the cookie fields empty.
-      GAFFERSTAPE_SESSION_TOKEN: "${GAFFERSTAPE_SESSION_TOKEN}"
-      GAFFERSTAPE_CSRF_TOKEN: "${GAFFERSTAPE_CSRF_TOKEN}"
+      # Optional env-var path: if config.yaml's cookie fields are empty,
+      # these are used as fallback. The file path supports hot-reload;
+      # env vars are baked in at container start. See docs/setup.md §2.
+      GAFFERSTAPE_SESSION_TOKEN: "${GAFFERSTAPE_SESSION_TOKEN:-}"
+      GAFFERSTAPE_CSRF_TOKEN: "${GAFFERSTAPE_CSRF_TOKEN:-}"
     healthcheck:
       # Inherited from the Dockerfile, restated here so `docker compose
       # ps` shows the configured interval explicitly.

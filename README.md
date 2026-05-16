@@ -38,19 +38,20 @@ A custom Home Assistant integration is on the table down the line, but a single 
 
 ## Quickstart
 
-1. Clone the repo and `cp config.example.yaml config.yaml`. Edit `listen`, `poll_interval`, etc. if the defaults don't suit you. Leave the cookie fields blank — they come from `.env` in step 3.
-2. Log in to [my.gaf.energy](https://my.gaf.energy) in Firefox. Open dev-tools → Storage → Cookies → `wamy.gaf.energy`. Copy the values of `Session-Token` and `CSRF-Token`.
-3. `cp .env.example .env` and paste them in.
-4. `docker compose up -d --build`. The image builds to ~10 MB (distroless) and runs as a non-root user.
-5. Verify:
+The image is published to GHCR at `ghcr.io/dev-dull/gafferstape` — by default `docker compose up` pulls it, no local build needed. See [docs/setup.md](docs/setup.md) for the long-form walkthrough.
+
+1. Clone the repo and `cp config.example.yaml config.yaml`. Paste your cookies into the `session_token` / `csrf_token` fields; the daemon hot-reloads them on every upstream call so future rotations don't require a container restart. (You can also use the `.env` path if you prefer — see [docs/setup.md §2](docs/setup.md#2-configure-gafferstape).)
+2. Log in to [my.gaf.energy](https://my.gaf.energy) in Firefox, open dev-tools → Storage → Cookies → `wamy.gaf.energy`, copy `Session-Token` and `CSRF-Token`.
+3. `docker compose up -d` (pulls the published image) — or `docker compose up -d --build` to build from this working tree instead.
+4. Verify:
    ```
    curl http://localhost:9876/healthz       # {"ok":true}
-   curl http://localhost:9876/api/state     # JSON snapshot (issue #5)
-   curl http://localhost:9876/metrics       # Prometheus text (issue #4)
+   curl http://localhost:9876/api/state     # JSON snapshot
+   curl http://localhost:9876/metrics       # Prometheus text
    ```
-6. Point Prometheus at `http://localhost:9876/metrics`, or wire Home Assistant to `/api/state` using [examples/homeassistant.yaml](examples/homeassistant.yaml).
+5. Point Prometheus at `http://localhost:9876/metrics`, or wire Home Assistant to `/api/state` using [examples/homeassistant.yaml](examples/homeassistant.yaml). Sample alert rules in [examples/alerts.yaml](examples/alerts.yaml).
 
-Cookies expire about every 25 days. Watch `gaf_session_expires_seconds` (or the `session_expires_at` field in `/api/state`) and repeat steps 2–3 before they die.
+Cookies expire about every 25 days. Watch `gaf_session_expires_at_timestamp_seconds` (Grafana renders it as a date) or the `session_expires_at` field in `/api/state`, and edit `config.yaml` before they die.
 
 ## Documentation
 
