@@ -15,6 +15,7 @@ coverage.html
 .vscode/
 .DS_Store
 *.swp
+*.bak
 *~
 
 # Claude Code worktrees from parallel agents

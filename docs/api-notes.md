@@ -92,7 +92,8 @@ Returns user profile plus inverter details: `manufacturer`, `model`, `serialNumb
 ## Request headers we send
 
 - `Cookie: Session-Token=...; CSRF-Token=...` — both cookies on every request.
-- `x-csrf-token: <CSRF-Token cookie value, verbatim>` — **confirmed** from the HAR: the portal sends this header on every authenticated GET (not just writes), and its value is the same as the `CSRF-Token` cookie. No decoding required — pass it through as-is. The cookie value as stored by Firefox is already URL-encoded for chars like `+`; we send the same string for both cookie and header. The wire-format double-encoding Firefox does on the `Cookie:` header (`%2b` → `%252b`) is a quirk of cookie transmission and doesn't seem to matter to the server.
+- `x-csrf-token: <CSRF-Token cookie value, single-encoded>` — confirmed from the HAR: the portal sends this header on every authenticated GET (not just writes), and its value is the **single-URL-encoded** form (what JS reads from `document.cookie`, e.g. `waHJ%2b...`).
+- `Cookie: Session-Token=…; CSRF-Token=…` — the CSRF cookie value must arrive **double-URL-encoded on the wire** (`%2b` → `%252b`). The server's CSRF check unescapes the cookie value once and compares to the `x-csrf-token` header; sending both single-encoded produces a mismatch and a 401. This was discovered the hard way during the first real-cookie smoke test on 2026-05-16; the daemon now `url.QueryEscape`s cookie values before handing them to the jar to match Firefox's wire behaviour.
 - `User-Agent: gafferstape/<version> (+https://github.com/dev-dull/gafferstape)` — be findable. GAF can see who's hitting their API and click through to the project. The `+URL` form is the convention used by Googlebot etc.
 - Standard `Accept: application/json`.
 

@@ -388,6 +388,42 @@ func TestNewRejectsBadBaseURL(t *testing.T) {
 	}
 }
 
+func TestCookieValuesDoubleEncodedOnWire(t *testing.T) {
+	// Capture the raw Cookie request header — Go's server doesn't
+	// URL-unescape cookie values, so what we see here IS the wire form.
+	var rawCookieHeader string
+	var rawCSRFHeader string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawCookieHeader = r.Header.Get("Cookie")
+		rawCSRFHeader = r.Header.Get("x-csrf-token")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":{"properties":[]},"isSuccess":true,"errorMessage":null,"validationErrors":null,"traceId":"t"}`)
+	}))
+	t.Cleanup(ts.Close)
+
+	const rawCSRF = "abc%2bdef%3d" // single-encoded — what a user pastes
+	c, err := New(Config{
+		BaseURL:      ts.URL,
+		SessionToken: "jwt.with.no.specials",
+		CSRFToken:    rawCSRF,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetProperties(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cookie value must be double-encoded on the wire (%2b → %252b).
+	if !strings.Contains(rawCookieHeader, "CSRF-Token=abc%252bdef%253d") {
+		t.Errorf("Cookie header CSRF-Token not double-encoded; got %q", rawCookieHeader)
+	}
+	// x-csrf-token header must remain in the user-supplied single-encoded form.
+	if rawCSRFHeader != rawCSRF {
+		t.Errorf("x-csrf-token = %q, want %q (verbatim, single-encoded)", rawCSRFHeader, rawCSRF)
+	}
+}
+
 func TestNewDefaults(t *testing.T) {
 	c, err := New(Config{SessionToken: "s", CSRFToken: "c"})
 	if err != nil {

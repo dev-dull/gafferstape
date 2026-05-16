@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -96,9 +97,18 @@ func New(cfg Config) (*Client, error) {
 		}
 		httpClient.Jar = jar
 	}
+	// The portal's CSRF check compares the (URL-unescaped) cookie value
+	// against the x-csrf-token header value. Firefox transmits cookie
+	// values with their % characters URL-encoded a second time on the
+	// wire (so a stored `%2b` becomes `%252b` in the Cookie: header),
+	// which means the server's single unescape recovers the same string
+	// JS reads from document.cookie and sends in the header. Go's
+	// cookiejar writes Cookie.Value verbatim, so we have to pre-encode
+	// ourselves to match Firefox's wire format — sending both
+	// single-encoded mismatches and earns a 401.
 	httpClient.Jar.SetCookies(base, []*http.Cookie{
-		{Name: cookieSession, Value: cfg.SessionToken, Path: "/"},
-		{Name: cookieCSRF, Value: cfg.CSRFToken, Path: "/"},
+		{Name: cookieSession, Value: cookieWireValue(cfg.SessionToken), Path: "/"},
+		{Name: cookieCSRF, Value: cookieWireValue(cfg.CSRFToken), Path: "/"},
 	})
 
 	ua := cfg.UserAgent
@@ -206,4 +216,14 @@ func (e *AuthError) Error() string {
 func IsAuthError(err error) bool {
 	var ae *AuthError
 	return errors.As(err, &ae)
+}
+
+// cookieWireValue takes the "logical" cookie value the user pasted (the
+// form shown in Firefox's Storage panel / document.cookie, e.g.
+// "waHJ%2bv...") and returns the form a browser would put on the wire
+// in a Cookie: header. In practice this re-encodes any literal `%`
+// characters as `%25`. Other chars in our tokens (JWT base64url body,
+// `.` separators) survive QueryEscape unchanged.
+func cookieWireValue(v string) string {
+	return url.QueryEscape(strings.TrimSpace(v))
 }
