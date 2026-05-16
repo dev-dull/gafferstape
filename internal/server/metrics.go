@@ -47,6 +47,11 @@ var (
 		"Seconds until the Session-Token JWT expires. Negative if already expired; 0 if unknown.",
 		nil, nil,
 	)
+	descSessionExpiresAt = prometheus.NewDesc(
+		"gaf_session_expires_at_timestamp_seconds",
+		"Unix timestamp (UTC) of the Session-Token JWT's exp claim. 0 if unknown.",
+		nil, nil,
+	)
 	descLastSample = prometheus.NewDesc(
 		"gaf_last_sample_timestamp_seconds",
 		"Unix time of the newest hourly bucket seen for this property.",
@@ -82,6 +87,7 @@ var (
 func (c *gafCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descUp
 	ch <- descSessionExpires
+	ch <- descSessionExpiresAt
 	ch <- descLastSample
 	ch <- descLatestHour
 	ch <- descToday
@@ -99,6 +105,7 @@ func (c *gafCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	ch <- prometheus.MustNewConstMetric(descUp, prometheus.GaugeValue, up)
 	ch <- prometheus.MustNewConstMetric(descSessionExpires, prometheus.GaugeValue, sessionExpiresSeconds(s.SessionExpiresAt))
+	ch <- prometheus.MustNewConstMetric(descSessionExpiresAt, prometheus.GaugeValue, sessionExpiresAtUnix(s.SessionExpiresAt))
 
 	for _, p := range s.Properties {
 		addr := formatAddress(p.Street, p.City, p.State)
@@ -131,6 +138,13 @@ func sessionExpiresSeconds(exp time.Time) float64 {
 		return 0
 	}
 	return time.Until(exp).Seconds()
+}
+
+func sessionExpiresAtUnix(exp time.Time) float64 {
+	if exp.IsZero() {
+		return 0
+	}
+	return float64(exp.Unix())
 }
 
 func formatAddress(street, city, state string) string {

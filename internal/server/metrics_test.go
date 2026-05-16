@@ -145,6 +145,18 @@ func TestMetricsSessionExpiresZero(t *testing.T) {
 	snap := &fakeSnap{s: poller.Snapshot{}}
 	_, body := fetchMetrics(t, snap)
 	mustContain(t, body, "gaf_session_expires_seconds 0")
+	mustContain(t, body, "gaf_session_expires_at_timestamp_seconds 0")
+}
+
+func TestMetricsSessionExpiresAtTimestamp(t *testing.T) {
+	exp := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	snap := &fakeSnap{s: poller.Snapshot{
+		OK:               true,
+		SessionExpiresAt: exp,
+	}}
+	_, body := fetchMetrics(t, snap)
+	want := strconv.FormatFloat(float64(exp.Unix()), 'g', -1, 64)
+	mustContain(t, body, "gaf_session_expires_at_timestamp_seconds "+want)
 }
 
 func TestMetricsInverterAbsentWhenZero(t *testing.T) {

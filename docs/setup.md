@@ -109,13 +109,14 @@ scrape_configs:
 
 For a panel of type "Time series" or "Stat":
 
-| Display                                  | Query                                       |
-| ---------------------------------------- | ------------------------------------------- |
-| Today's production so far (kWh)          | `gaf_energy_production_kwh_today`           |
-| Yesterday's total (stable until midnight)| `gaf_energy_production_kwh_yesterday`       |
-| Most recent hourly bucket                | `gaf_energy_production_kwh_latest_hour`    |
-| Days until session cookies expire        | `gaf_session_expires_seconds / 86400`       |
-| Exporter health                          | `gaf_up`                                    |
+| Display                                  | Query                                                  |
+| ---------------------------------------- | ------------------------------------------------------ |
+| Today's production so far (kWh)          | `gaf_energy_production_kwh_today`                      |
+| Yesterday's total (stable until midnight)| `gaf_energy_production_kwh_yesterday`                  |
+| Most recent hourly bucket                | `gaf_energy_production_kwh_latest_hour`               |
+| Days until session cookies expire        | `gaf_session_expires_seconds / 86400`                  |
+| When session cookies expire (panel-as-date) | `gaf_session_expires_at_timestamp_seconds` (Grafana panel format: "From Unix Time") |
+| Exporter health                          | `gaf_up`                                               |
 
 For multi-property accounts, every per-property metric carries `property_id` and `address` labels; break out by `property_id` to graph each system separately. Inverter make/model can be joined via `gaf_inverter_info`.
 

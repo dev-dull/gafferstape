@@ -24,3 +24,8 @@ rest:
         device_class: energy
         value_template: "{{ value_json.properties[0].yesterday_kwh }}"
         availability: "{{ value_json.ok }}"
+      - name: "Gafferstape Session Expires"
+        unique_id: gafferstape_session_expires_at
+        device_class: timestamp
+        value_template: "{{ value_json.session_expires_at }}"
+        availability: "{{ value_json.session_expires_at is defined }}"
