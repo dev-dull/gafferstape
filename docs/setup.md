@@ -28,6 +28,8 @@
 - A Prometheus server or Home Assistant install (or both) reachable from that host.
 - Firefox for the cookie capture step. Other browsers work in principle — open their equivalent dev-tools storage panel — but the field names and paths below are Firefox's.
 
+> **Deploying to Kubernetes instead?** [`charts/gafferstape/README.md`](../charts/gafferstape/README.md) is the K8s-equivalent of this guide. Same cookie-capture flow (§1 below), but `helm install` replaces `docker compose up`. Skip ahead to §1, capture cookies, then jump to the chart README.
+
 ## 1. Capture the session cookies
 
 The portal protects its login form with reCAPTCHA, so the daemon can't sign in for you. Instead you log in once in a browser, copy the resulting cookies into a file, and rotate them every few weeks.
@@ -85,9 +87,11 @@ Leave `session_token` and `csrf_token` blank in `config.yaml`. The env vars in `
 ## 3. Run it
 
 ```sh
-docker compose up -d --build
+docker compose up -d           # pulls ghcr.io/dev-dull/gafferstape:latest
 docker compose logs -f gafferstape
 ```
+
+(Add `--build` to compile from the current working tree instead of pulling.)
 
 You should see, in order, something like:
 
@@ -203,6 +207,22 @@ The container does not need to be restarted. The daemon stats the file on every 
 $EDITOR .env
 docker compose up -d   # recreates the container with the new env
 ```
+
+**If you installed via Helm:**
+
+The K8s flow is different because cookies live in a Secret injected as env vars (not in a hot-reloaded file), so a Pod restart is required to pick up rotated cookies:
+
+```sh
+kubectl create secret generic <your-secret-name> \
+  --namespace gafferstape \
+  --from-literal=session-token=NEW_JWT \
+  --from-literal=csrf-token=NEW_CSRF \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl rollout restart deployment/gafferstape --namespace gafferstape
+```
+
+Set `reloader.enabled=true` in chart values (and install [stakater/reloader](https://github.com/stakater/Reloader)) to automate the rollout — see [`charts/gafferstape/README.md`](../charts/gafferstape/README.md).
 
 Either way, no data loss — Prometheus and Home Assistant pick back up the moment polling resumes.
 

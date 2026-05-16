@@ -110,9 +110,23 @@ properties: []
 
 Secrets can also be supplied via env vars (`GAFFERSTAPE_SESSION_TOKEN`, `GAFFERSTAPE_CSRF_TOKEN`) so Docker users don't have to bake them into the config file.
 
-## Docker packaging
+## Deployment shapes
 
-Multi-stage build: `golang:1.23-alpine` to compile, `gcr.io/distroless/static:nonroot` to ship. Binary listens on `:9876`. No volumes required (cache is in-memory); config is mounted read-only.
+The daemon is one Go process; how it gets to a host is the user's choice. Two paths are first-class:
+
+### Docker (image + Compose)
+
+Multi-stage build: `golang:1.25-alpine` to compile, `gcr.io/distroless/static:nonroot` to ship. Final image ~19 MB, listens on `:9876`, runs as the distroless `nonroot` user. No volumes required (cache is in-memory); config is bind-mounted read-only.
+
+The image is published to `ghcr.io/dev-dull/gafferstape` on each `v*.*.*` tag (multi-arch: linux/amd64 + linux/arm64) by `.github/workflows/release.yaml`. `docker compose up -d` against the committed `docker-compose.yaml` pulls the latest published image; `--build` switches to a working-tree build.
+
+Token rotation here is **hot-reload**: edit `config.yaml`'s `session_token` / `csrf_token` fields, daemon picks up the change on its next upstream request, no `docker compose` invocation needed.
+
+### Kubernetes (Helm chart)
+
+`charts/gafferstape/` is the standard Kubernetes install path. Defaults to the same published image, ships a Deployment + Service + ConfigMap + ServiceAccount + (optional) Secret + (optional) ServiceMonitor. CI lints and templates the chart against three value combinations + kubeconform-validates the rendered manifests.
+
+Token rotation in Kubernetes is **not hot-reload** — the kubelet only re-reads env-injected Secret values at container start, so rotation requires `kubectl rollout restart` (or [stakater/reloader](https://github.com/stakater/Reloader) auto-restarting on Secret changes if `reloader.enabled=true`). The Pod gains a `checksum/config` annotation so ConfigMap changes (poll interval, log level, etc.) similarly trigger a rollout. Documented in [`charts/gafferstape/README.md`](../charts/gafferstape/README.md) under "Limitations."
 
 ## Failure modes and how we handle them
 

@@ -57,12 +57,57 @@ ERROR session is no longer authenticated; halting poller — paste fresh cookies
 
 Treat that as a paging condition. Refresh cookies, `docker compose up -d`, polling resumes.
 
+## Kubernetes-specific
+
+### Pod is `CrashLoopBackOff` immediately after install
+
+Almost always a Secret problem.
+
+1. Confirm the Secret exists with the **exact** key names `session-token` and `csrf-token`:
+   ```sh
+   kubectl describe secret <your-secret-name> --namespace <ns>
+   # Data
+   # ====
+   # csrf-token:     XXX bytes
+   # session-token:  XXX bytes
+   ```
+   If the keys are `sessionToken` / `csrfToken` (camelCase) or `SESSION_TOKEN` / `CSRF_TOKEN`, the env var lookup fails and the daemon exits.
+2. Confirm the chart references the right Secret. If you used `tokens.existingSecret=foo`, the Deployment's env vars should reference `name: foo`:
+   ```sh
+   kubectl get deployment <release>-gafferstape -n <ns> -o jsonpath='{.spec.template.spec.containers[0].env}'
+   ```
+3. `kubectl logs <pod>` will usually give the actual error (env var missing, parse failure, etc).
+
+### ServiceMonitor not picked up by Prometheus
+
+The Prometheus Operator only selects ServiceMonitors with labels matching its `serviceMonitorSelector`. kube-prometheus-stack defaults to `release: <helm-release-name>`. Set `serviceMonitor.labels.release: kube-prometheus-stack` (or whatever your operator release is named) in chart values.
+
+```sh
+kubectl get prometheus -A -o jsonpath='{.items[*].spec.serviceMonitorSelector}'
+```
+
+shows the active selector. The chart's ServiceMonitor needs labels matching it.
+
+### Cookies updated but pod is still failing auth
+
+Env vars are only read at container start. After updating the Secret, you have to restart the Pod:
+
+```sh
+kubectl rollout restart deployment/<release>-gafferstape -n <ns>
+```
+
+To automate this, install [stakater/reloader](https://github.com/stakater/Reloader) and set `reloader.enabled=true` in the chart values — the controller watches the Secret and triggers the rollout for you.
+
+### Pod evicted / OOMKilled
+
+The default `resources.limits.memory: 128Mi` is conservative. If your account has many properties or you bumped `poll_interval` very low, watch `kubectl top pod` for a few hours and bump the limit. The Go runtime overhead floor is ~40Mi; everything else is the property snapshot cache (small) and the Prometheus scrape buffer.
+
 ## "I see a different error"
 
 File an issue with:
 
-- A redacted `docker compose logs gafferstape` excerpt — **strip any `Session-Token` strings**, they're live credentials.
-- `curl http://localhost:9876/api/state` output.
+- A redacted log excerpt (`docker compose logs gafferstape` or `kubectl logs <pod>`) — **strip any `Session-Token` strings**, they're live credentials.
+- `curl <endpoint>/api/state` output.
 - What you expected vs. observed.
 
 https://github.com/dev-dull/gafferstape/issues
