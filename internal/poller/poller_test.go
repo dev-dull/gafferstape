@@ -779,6 +779,57 @@ func TestSnapshotIncludesScrapeErrors(t *testing.T) {
 	}
 }
 
+// ---------- Token hot-reload ----------
+
+// mutableTokens is a goroutine-safe TokenProvider whose returned pair
+// can be swapped between calls — used to simulate the user editing
+// config.yaml mid-run.
+type mutableTokens struct {
+	mu         sync.Mutex
+	sess, csrf string
+}
+
+func (m *mutableTokens) set(sess, csrf string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sess, m.csrf = sess, csrf
+}
+
+func (m *mutableTokens) Tokens(_ context.Context) (string, string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.sess, m.csrf, nil
+}
+
+func TestPollerHotReloadsSessionExpiry(t *testing.T) {
+	initialExp := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	updatedExp := time.Date(2027, 2, 15, 9, 0, 0, 0, time.UTC)
+
+	tokens := &mutableTokens{
+		sess: makeJWT(t, initialExp),
+		csrf: "irrelevant-for-poller",
+	}
+	api := newFake()
+	p := newTestPoller(t, api, func(c *Config) {
+		c.TokenProvider = tokens
+		c.SessionToken = "" // provider wins; field unused
+	})
+
+	if got := p.Snapshot().SessionExpiresAt; !got.Equal(initialExp) {
+		t.Fatalf("initial SessionExpiresAt = %s, want %s", got, initialExp)
+	}
+
+	// Simulate the user editing config.yaml in place — provider now
+	// returns a JWT with a later exp.
+	tokens.set(makeJWT(t, updatedExp), "irrelevant-for-poller-2")
+
+	p.pollOnce(context.Background(), time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC))
+
+	if got := p.Snapshot().SessionExpiresAt; !got.Equal(updatedExp) {
+		t.Errorf("after token swap, SessionExpiresAt = %s, want %s", got, updatedExp)
+	}
+}
+
 // ---------- Run loop integration ----------
 
 func TestRunStopsOnContextCancel(t *testing.T) {

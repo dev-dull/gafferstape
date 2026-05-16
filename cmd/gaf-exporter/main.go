@@ -74,7 +74,7 @@ func run(ctx context.Context, args []string) error {
 		"properties_pinned", len(cfg.Properties),
 	)
 
-	pol, err := buildPoller(cfg, logger)
+	pol, err := buildPoller(cfg, *configPath, logger)
 	if err != nil {
 		return err
 	}
@@ -88,30 +88,41 @@ func run(ctx context.Context, args []string) error {
 	return runServices(ctx, pol, server.New(cfg.Listen, logger, snap), logger)
 }
 
-// buildPoller returns a configured poller, or (nil, nil) when cookies are
-// missing — in which case the daemon runs in /healthz-only mode and logs
-// a clear warning. Returns a real error only on malformed inputs.
-func buildPoller(cfg config.Config, logger *slog.Logger) (*poller.Poller, error) {
-	if cfg.SessionToken == "" || cfg.CSRFToken == "" {
-		logger.Warn("session_token / csrf_token not configured; running in /healthz-only mode (no upstream polling)")
+// buildPoller wires up a hot-reloading FileTokenProvider so the user
+// can rotate cookies without restarting the container: the daemon
+// re-reads the token fields from configPath before every upstream
+// request. The env-var values captured at startup (Config.SessionToken
+// / Config.CSRFToken) act as a fallback when the file's fields are
+// empty, preserving the docker-compose + .env first-run flow.
+//
+// Returns (nil, nil) — /healthz-only mode — when no usable tokens can
+// be resolved from either the file or env vars at startup. A real
+// error is returned only on malformed inputs.
+func buildPoller(cfg config.Config, configPath string, logger *slog.Logger) (*poller.Poller, error) {
+	tokenProvider := config.NewFileTokenProvider(configPath, cfg.SessionToken, cfg.CSRFToken)
+
+	if _, _, err := tokenProvider.Tokens(context.Background()); err != nil {
+		logger.Warn("tokens not configured; running in /healthz-only mode (no upstream polling)",
+			"hint", "set session_token / csrf_token in "+configPath+", or use GAFFERSTAPE_SESSION_TOKEN / GAFFERSTAPE_CSRF_TOKEN env vars",
+			"err", err,
+		)
 		return nil, nil
 	}
 
 	cli, err := client.New(client.Config{
-		SessionToken: cfg.SessionToken,
-		CSRFToken:    cfg.CSRFToken,
-		UserAgent:    "gafferstape/" + version + " (+https://github.com/dev-dull/gafferstape)",
-		Logger:       logger.With("component", "client"),
+		TokenProvider: tokenProvider,
+		UserAgent:     "gafferstape/" + version + " (+https://github.com/dev-dull/gafferstape)",
+		Logger:        logger.With("component", "client"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build client: %w", err)
 	}
 	pol, err := poller.New(poller.Config{
-		API:          cli,
-		Interval:     cfg.PollInterval.Std(),
-		SessionToken: cfg.SessionToken,
-		PropertyIDs:  cfg.Properties,
-		Logger:       logger.With("component", "poller"),
+		API:           cli,
+		TokenProvider: tokenProvider,
+		Interval:      cfg.PollInterval.Std(),
+		PropertyIDs:   cfg.Properties,
+		Logger:        logger.With("component", "poller"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build poller: %w", err)

@@ -388,6 +388,55 @@ func TestNewRejectsBadBaseURL(t *testing.T) {
 	}
 }
 
+// fnTokens is a closure-backed TokenProvider used by tests that need
+// mutable token state between requests.
+type fnTokens func() (string, string, error)
+
+func (f fnTokens) Tokens(_ context.Context) (string, string, error) { return f() }
+
+func TestClientCallsTokenProviderEveryRequest(t *testing.T) {
+	// Capture the x-csrf-token header per request so we can verify
+	// the client picks up rotated tokens without being restarted.
+	var seen []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("x-csrf-token"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":{"properties":[]},"isSuccess":true,"errorMessage":null,"validationErrors":null,"traceId":"t"}`)
+	}))
+	t.Cleanup(ts.Close)
+
+	sess, csrf := "session-A", "csrf-A"
+	provider := fnTokens(func() (string, string, error) { return sess, csrf, nil })
+
+	c, err := New(Config{
+		BaseURL:       ts.URL,
+		TokenProvider: provider,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetProperties(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// User edits config.yaml — provider now returns new tokens.
+	sess, csrf = "session-B", "csrf-B"
+
+	if _, err := c.GetProperties(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(seen) != 2 {
+		t.Fatalf("got %d requests, want 2", len(seen))
+	}
+	if seen[0] != "csrf-A" {
+		t.Errorf("first request used csrf = %q, want csrf-A", seen[0])
+	}
+	if seen[1] != "csrf-B" {
+		t.Errorf("second request used csrf = %q, want csrf-B (token swap should propagate without restart)", seen[1])
+	}
+}
+
 func TestCookieValuesDoubleEncodedOnWire(t *testing.T) {
 	// Capture the raw Cookie request header — Go's server doesn't
 	// URL-unescape cookie values, so what we see here IS the wire form.

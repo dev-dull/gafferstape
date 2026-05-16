@@ -43,8 +43,15 @@ type Config struct {
 	Interval time.Duration
 	// SessionToken (the Session-Token cookie value, a JWT) is decoded
 	// only to extract the exp claim — exposed as SessionExpiresAt so
-	// alerting can warn before manual cookie refresh is needed. Required.
+	// alerting can warn before manual cookie refresh is needed.
+	// Required when TokenProvider is nil; ignored otherwise.
 	SessionToken string
+	// TokenProvider, when set, is called once per tick to refresh the
+	// JWT expiry so config-file edits to cookies propagate without
+	// restarting the daemon. The client should be configured with the
+	// same provider so its upstream requests pick up the rotated
+	// cookies too.
+	TokenProvider client.TokenProvider
 	// PropertyIDs optionally restricts polling to a subset of the
 	// account's properties. Empty = all.
 	PropertyIDs []string
@@ -69,6 +76,7 @@ type Poller struct {
 	logger         *slog.Logger
 	now            func() time.Time
 	retry          retryConfig
+	tokenProvider  client.TokenProvider // optional; non-nil = hot-reload session expiry per tick
 
 	// Loop-local state: only touched from Run/pollOnce, no lock.
 	metadataLastRefresh time.Time
@@ -104,8 +112,8 @@ func New(cfg Config) (*Poller, error) {
 	if cfg.API == nil {
 		return nil, errors.New("poller: API is required")
 	}
-	if cfg.SessionToken == "" {
-		return nil, errors.New("poller: SessionToken is required (for JWT exp parsing)")
+	if cfg.TokenProvider == nil && cfg.SessionToken == "" {
+		return nil, errors.New("poller: TokenProvider or SessionToken required (for JWT exp parsing)")
 	}
 	interval := cfg.Interval
 	if interval <= 0 {
@@ -131,11 +139,21 @@ func New(cfg Config) (*Poller, error) {
 	// Parse session expiry up front so /metrics can report it even
 	// before the first successful tick. If decoding fails we log and
 	// continue — the worst case is a missing alerting signal.
+	initialToken := cfg.SessionToken
+	if cfg.TokenProvider != nil {
+		if sess, _, err := cfg.TokenProvider.Tokens(context.Background()); err == nil {
+			initialToken = sess
+		} else {
+			logger.Warn("token provider failed at startup; will retry on each tick", "err", err)
+		}
+	}
 	var sessExp time.Time
-	if exp, err := client.ParseJWTExpiry(cfg.SessionToken); err == nil {
-		sessExp = exp
-	} else {
-		logger.Warn("could not parse session token expiry", "err", err)
+	if initialToken != "" {
+		if exp, err := client.ParseJWTExpiry(initialToken); err == nil {
+			sessExp = exp
+		} else {
+			logger.Warn("could not parse session token expiry", "err", err)
+		}
 	}
 
 	p := &Poller{
@@ -148,6 +166,7 @@ func New(cfg Config) (*Poller, error) {
 		perProperty:      make(map[string]propertyState),
 		sessionExpiresAt: sessExp,
 		scrapeErrors:     make(map[string]int64),
+		tokenProvider:    cfg.TokenProvider,
 		retry: retryConfig{
 			maxAttempts: firstPositive(cfg.RetryMaxAttempts, 3),
 			base:        firstPositiveDuration(cfg.RetryBaseBackoff, 500*time.Millisecond),
@@ -208,6 +227,17 @@ func (p *Poller) Run(ctx context.Context) error {
 // real timers.
 func (p *Poller) pollOnce(ctx context.Context, now time.Time) {
 	started := time.Now()
+
+	// Refresh sessionExpiresAt from the provider so a user editing
+	// the config file in place doesn't have to restart the daemon to
+	// see the new JWT's expiry reflected in metrics/alerts.
+	if p.tokenProvider != nil {
+		if sess, _, err := p.tokenProvider.Tokens(ctx); err == nil {
+			if exp, err := client.ParseJWTExpiry(sess); err == nil {
+				p.sessionExpiresAt = exp
+			}
+		}
+	}
 
 	if !p.checkSessionExpiry(now) {
 		return

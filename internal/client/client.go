@@ -1,7 +1,6 @@
 // Package client wraps the my.gaf.energy customer-portal API. It assumes
 // the caller has already logged in via a browser and pasted the session
-// cookies into config — see docs/setup.md (arrives with issue #7) for
-// the user-facing walkthrough.
+// cookies into config — see docs/setup.md for the user-facing walkthrough.
 package client
 
 import (
@@ -12,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"time"
@@ -35,17 +33,22 @@ type Config struct {
 	// BaseURL of the API. Defaults to DefaultBaseURL.
 	BaseURL string
 
-	// SessionToken is the Session-Token cookie value (a JWT). Required.
+	// TokenProvider supplies fresh cookies before every authenticated
+	// request. When set, SessionToken/CSRFToken are ignored. When nil,
+	// a StaticTokens wrapping SessionToken/CSRFToken is used and the
+	// pair is required.
+	TokenProvider TokenProvider
+
+	// SessionToken is the Session-Token cookie value (a JWT). Required
+	// when TokenProvider is nil; ignored otherwise.
 	SessionToken string
 
-	// CSRFToken is the CSRF-Token cookie value. Sent both as the
-	// CSRF-Token cookie and as the x-csrf-token request header — the
-	// portal validates both, as confirmed in docs/api-notes.md. Required.
+	// CSRFToken is the CSRF-Token cookie value. Required when
+	// TokenProvider is nil; ignored otherwise.
 	CSRFToken string
 
 	// HTTPClient lets callers swap in their own transport (e.g. tests,
-	// proxies). If nil, a client with a 30s timeout and a cookie jar is
-	// constructed.
+	// proxies). If nil, a client with a 30s timeout is constructed.
 	HTTPClient *http.Client
 
 	// UserAgent string sent on every request. Defaults to
@@ -60,18 +63,19 @@ type Config struct {
 type Client struct {
 	base      *url.URL
 	http      *http.Client
-	csrfTok   string
+	tokens    TokenProvider
 	userAgent string
 	logger    *slog.Logger
 }
 
-// New constructs a Client from cfg. SessionToken and CSRFToken are required.
+// New constructs a Client from cfg.
 func New(cfg Config) (*Client, error) {
-	if cfg.SessionToken == "" {
-		return nil, errors.New("client: SessionToken is required")
-	}
-	if cfg.CSRFToken == "" {
-		return nil, errors.New("client: CSRFToken is required")
+	provider := cfg.TokenProvider
+	if provider == nil {
+		if cfg.SessionToken == "" || cfg.CSRFToken == "" {
+			return nil, errors.New("client: provide TokenProvider, or both SessionToken and CSRFToken")
+		}
+		provider = StaticTokens{Session: cfg.SessionToken, CSRF: cfg.CSRFToken}
 	}
 
 	rawBase := cfg.BaseURL
@@ -90,26 +94,6 @@ func New(cfg Config) (*Client, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultTimeout}
 	}
-	if httpClient.Jar == nil {
-		jar, err := cookiejar.New(nil)
-		if err != nil {
-			return nil, fmt.Errorf("cookie jar: %w", err)
-		}
-		httpClient.Jar = jar
-	}
-	// The portal's CSRF check compares the (URL-unescaped) cookie value
-	// against the x-csrf-token header value. Firefox transmits cookie
-	// values with their % characters URL-encoded a second time on the
-	// wire (so a stored `%2b` becomes `%252b` in the Cookie: header),
-	// which means the server's single unescape recovers the same string
-	// JS reads from document.cookie and sends in the header. Go's
-	// cookiejar writes Cookie.Value verbatim, so we have to pre-encode
-	// ourselves to match Firefox's wire format — sending both
-	// single-encoded mismatches and earns a 401.
-	httpClient.Jar.SetCookies(base, []*http.Cookie{
-		{Name: cookieSession, Value: cookieWireValue(cfg.SessionToken), Path: "/"},
-		{Name: cookieCSRF, Value: cookieWireValue(cfg.CSRFToken), Path: "/"},
-	})
 
 	ua := cfg.UserAgent
 	if ua == "" {
@@ -123,7 +107,7 @@ func New(cfg Config) (*Client, error) {
 	return &Client{
 		base:      base,
 		http:      httpClient,
-		csrfTok:   cfg.CSRFToken,
+		tokens:    provider,
 		userAgent: ua,
 		logger:    logger,
 	}, nil
@@ -132,7 +116,16 @@ func New(cfg Config) (*Client, error) {
 // do issues an authenticated GET. On 401/403 it returns an *AuthError so
 // callers can distinguish session death from transient upstream failure.
 // The caller owns resp.Body and must close it.
+//
+// Tokens are fetched from the configured TokenProvider on every call,
+// so an updated config.yaml on disk (or any other provider state
+// change) propagates without restarting the daemon.
 func (c *Client) do(ctx context.Context, path string, query url.Values) (*http.Response, error) {
+	session, csrf, err := c.tokens.Tokens(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetch tokens: %w", err)
+	}
+
 	u := *c.base
 	u.Path = path
 	if query != nil {
@@ -144,7 +137,16 @@ func (c *Client) do(ctx context.Context, path string, query url.Values) (*http.R
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set(headerCSRF, c.csrfTok)
+	req.Header.Set(headerCSRF, csrf)
+	// Build the Cookie header manually rather than going through an
+	// http.CookieJar. The portal's CSRF check unescapes the cookie
+	// value once and compares it to the x-csrf-token header; Firefox
+	// transmits the cookie value with its % characters URL-encoded
+	// (stored `%2b` → `%252b` in the Cookie header), which our
+	// cookieWireValue reproduces. Sending both single-encoded fails
+	// the server's check and earns a 401 (see api-notes.md "Request
+	// headers we send").
+	req.Header.Set("Cookie", buildCookieHeader(session, csrf))
 
 	c.logger.Debug("api request", "url", u.String())
 
@@ -226,4 +228,13 @@ func IsAuthError(err error) bool {
 // `.` separators) survive QueryEscape unchanged.
 func cookieWireValue(v string) string {
 	return url.QueryEscape(strings.TrimSpace(v))
+}
+
+// buildCookieHeader formats the two cookies in the order Firefox uses,
+// applying the wire-format encoding for each value.
+func buildCookieHeader(session, csrf string) string {
+	return fmt.Sprintf("%s=%s; %s=%s",
+		cookieSession, cookieWireValue(session),
+		cookieCSRF, cookieWireValue(csrf),
+	)
 }

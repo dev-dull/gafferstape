@@ -47,12 +47,25 @@ cp config.example.yaml config.yaml
 cp .env.example .env
 ```
 
-Edit `.env` and paste the cookies from step 1:
+Pick one place to put the cookies. Both work, but they have different rotation properties:
+
+**Option A — paste into `config.yaml` (recommended):**
+
+```yaml
+session_token: "eyJhbGciOi..."   # the full JWT
+csrf_token: "waHJbkZCfW%2bv..."   # exactly as Firefox showed it
+```
+
+The daemon re-reads the file on every upstream request and picks up edits without restarting. `config.yaml` is gitignored, so cookies don't land in the repo.
+
+**Option B — paste into `.env` (Docker Compose convenience):**
 
 ```sh
-GAFFERSTAPE_SESSION_TOKEN=eyJhbGciOi...     # the full JWT, no quotes needed
-GAFFERSTAPE_CSRF_TOKEN=waHJbkZCfW%2bv...    # exactly as Firefox showed it
+GAFFERSTAPE_SESSION_TOKEN=eyJhbGciOi...
+GAFFERSTAPE_CSRF_TOKEN=waHJbkZCfW%2bv...
 ```
+
+Env vars are baked into the container at start, so rotating means `docker compose up -d` to recreate. The env-var path is what to use when secrets are managed by an external tool (Docker secrets, Kubernetes, etc.) and you want them out of the mounted config file. If both file fields and env vars are set, the file fields win.
 
 You shouldn't usually need to touch `config.yaml` — the defaults are sensible:
 
@@ -171,12 +184,23 @@ To get the full ~25 days per rotation:
 
 ### Rotation command
 
+**If your tokens live in `config.yaml` (Option A in [§2](#2-configure-gafferstape) — recommended):**
+
 ```sh
-$EDITOR .env                  # paste the fresh values from a fresh login
-docker compose up -d          # recreates the container with the new env
+$EDITOR config.yaml   # paste the fresh values from a fresh login
+# Done. The daemon picks up the new cookies on its next upstream call.
 ```
 
-That's it. No data loss — Prometheus and Home Assistant pick back up the moment polling resumes.
+The container does not need to be restarted. The daemon stats the file on every API request and re-parses only when `mtime` changes, so the cost is essentially zero.
+
+**If your tokens live in `.env` (Option B):**
+
+```sh
+$EDITOR .env
+docker compose up -d   # recreates the container with the new env
+```
+
+Either way, no data loss — Prometheus and Home Assistant pick back up the moment polling resumes.
 
 ### Server-side policies we don't control
 
