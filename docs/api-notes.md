@@ -119,6 +119,32 @@ On `isSuccess: false`, `data` is null and `errorMessage` describes the problem. 
 - `x-cloud-trace-context` — GCP tracing, indicates backend hosting. Ignore.
 - No `RateLimit-*` headers observed, but that doesn't mean there's no limit — be conservative with poll frequency.
 
+## Session extension experiments (2026-05-16)
+
+Two experiments aimed at the question "can we avoid manual cookie rotation?" Both came back negative. Recording the methodology and outcomes so future-us doesn't repeat the work.
+
+### Experiment 1 — Does the API rotate cookies on responses?
+
+**Hypothesis:** GAF emits a fresh `Set-Cookie` on every authenticated GET, extending session lifetime as long as the daemon keeps polling.
+
+**Method:** Three consecutive `GET /api/property/get-all` requests with valid cookies, 30 seconds apart. Inspect response headers for `Set-Cookie` on `Session-Token` or `CSRF-Token`.
+
+**Result:** **Zero `Set-Cookie` headers across all three responses.** The JWT is a fixed bearer token; nothing about normal API usage extends its lifetime. Confirms the "exp from login moment" model.
+
+### Experiment 2 — Is reCAPTCHA enforced on `/api/auth/login`?
+
+**Hypothesis:** The JS frontend sends `recaptchaToken` on every login POST. Maybe the server merely records it for fraud signals and would accept a login without one.
+
+**Method:** A throwaway Go probe (`/tmp/recaptcha-probe`) reading email + password from stdin and posting `{email, password}` with the standard browser headers (`Origin`, `Referer`, our UA) but no `recaptchaToken` field.
+
+**Result:** **`HTTP 401`, no cookies set, generic `errorMessage: "Something went wrong"`.** This is the same catch-all error the portal returns for any auth failure (including CSRF mismatches — see the 2026-05-16 entry above), so we can't distinguish "missing field" from "validated and rejected." Functionally identical for our purposes: **no token, no session.**
+
+### Implications
+
+- **Manual cookie rotation every ~25 days is permanent**, absent GAF changing their API. There is no API-level escape hatch.
+- `gaf_session_expires_seconds` and the rotation flow in `docs/setup.md` §7 are the durable answer.
+- A browser-mediated approach (browser extension exporting cookies, or `chromedp` driving a real Chromium through login) is the only remaining auto-refresh option. The first is reasonable for end users; the second is currently a non-goal (see [issue #14](https://github.com/dev-dull/gafferstape/issues/14)).
+
 ## Gotchas
 
 - **No per-panel data.** The portal only exposes whole-system production. Per-microinverter telemetry isn't in any endpoint we've seen.
