@@ -2,18 +2,22 @@
 
 <a id="status"></a>
 
-> ## ⚠ Status: not yet tested end-to-end
+> ## ⚠ Status: alpha — validated end-to-end on 2026-05-16
 >
-> **What has been verified:**
-> - The Go code builds and passes its unit tests under the race detector.
-> - The Docker image builds (~19 MB), runs as a non-root user, and reaches a healthy state.
-> - The daemon correctly halts polling and surfaces the failure when given invalid cookies against the real my.gaf.energy upstream.
+> **Verified working:**
+> - Builds and unit tests pass under the race detector.
+> - The Docker image (~19 MB) runs as a non-root user, reaches `healthy`, and shuts down cleanly on `SIGTERM`.
+> - End-to-end smoke test against live `my.gaf.energy` with real cookies on 2026-05-16: `gaf_up=1`, one property auto-discovered, real `today_kwh` / `yesterday_kwh` / `latest_hour` values flowing, JWT expiry parsed correctly, inverter metadata (Delta M6-TL-US, serial, active flag) detected.
+> - Authentication halts cleanly with `gaf_up=0` and a clear log line when cookies expire (verified with deliberately invalid cookies).
+> - Token hot-reload: editing `config.yaml`'s `session_token` / `csrf_token` propagates to the next upstream call without a daemon restart (unit-tested at the client and poller layers).
+> - The CSRF wire-encoding gotcha that prevented authentication on the first real test is now fixed and locked in by a regression test.
 >
-> **What has NOT been verified:**
-> - Successful authentication with real cookies against the live API. Every smoke test so far has used garbage tokens that produce a real 401.
-> - Prometheus, Grafana, or Home Assistant actually consuming the output. The metric names, JSON shape, and HA YAML are designed correctly on paper but unproven in practice.
-> - Long-running behaviour over the full ~25-day JWT lifetime.
-> - Whether the cookie-extraction steps below match the latest Firefox UI exactly. They're derived from inspecting a HAR capture from one session.
+> **Not yet validated in practice:**
+> - Long-running behaviour over the full ~25-day JWT lifetime (only ~10 minutes of real polling observed so far).
+> - Prometheus scraping the `/metrics` endpoint from an actual Prometheus server in a deployment (the endpoint itself is verified by unit tests + manual curl).
+> - Home Assistant's `rest` sensor consuming `/api/state` in an actual HA install (the JSON shape is verified; HA's parsing isn't).
+> - Multi-property accounts (only one-property accounts tested).
+> - The Grafana dashboard ([issue #15](https://github.com/dev-dull/gafferstape/issues/15) — doesn't exist yet).
 >
 > If something doesn't match the description here, **that is a bug** — file it at https://github.com/dev-dull/gafferstape/issues with a redacted log excerpt and the output of `curl localhost:9876/api/state`.
 
