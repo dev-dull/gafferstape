@@ -26,7 +26,7 @@ const (
 	headerCSRF    = "x-csrf-token"
 
 	defaultTimeout   = 30 * time.Second
-	defaultUserAgent = "gafferstape/0.1.0-dev"
+	defaultUserAgent = "gafferstape/0.1.0-dev (+https://github.com/dev-dull/gafferstape)"
 )
 
 // Config configures a new Client.

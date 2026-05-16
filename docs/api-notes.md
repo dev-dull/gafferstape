@@ -93,7 +93,7 @@ Returns user profile plus inverter details: `manufacturer`, `model`, `serialNumb
 
 - `Cookie: Session-Token=...; CSRF-Token=...` — both cookies on every request.
 - `x-csrf-token: <CSRF-Token cookie value, verbatim>` — **confirmed** from the HAR: the portal sends this header on every authenticated GET (not just writes), and its value is the same as the `CSRF-Token` cookie. No decoding required — pass it through as-is. The cookie value as stored by Firefox is already URL-encoded for chars like `+`; we send the same string for both cookie and header. The wire-format double-encoding Firefox does on the `Cookie:` header (`%2b` → `%252b`) is a quirk of cookie transmission and doesn't seem to matter to the server.
-- `User-Agent: gafferstape/<version>` — be a good citizen, identify ourselves.
+- `User-Agent: gafferstape/<version> (+https://github.com/dev-dull/gafferstape)` — be findable. GAF can see who's hitting their API and click through to the project. The `+URL` form is the convention used by Googlebot etc.
 - Standard `Accept: application/json`.
 
 ## Response envelope

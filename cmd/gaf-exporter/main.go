@@ -100,7 +100,7 @@ func buildPoller(cfg config.Config, logger *slog.Logger) (*poller.Poller, error)
 	cli, err := client.New(client.Config{
 		SessionToken: cfg.SessionToken,
 		CSRFToken:    cfg.CSRFToken,
-		UserAgent:    "gafferstape/" + version,
+		UserAgent:    "gafferstape/" + version + " (+https://github.com/dev-dull/gafferstape)",
 		Logger:       logger.With("component", "client"),
 	})
 	if err != nil {
