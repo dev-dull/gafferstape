@@ -1,14 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
   "annotations": {
     "list": []
   },
@@ -98,14 +88,13 @@
       },
       "targets": [
         {
-          "expr": "gaf_session_expires_seconds",
+          "expr": "max(gaf_session_expires_seconds{job=\"gafferstape\"})",
           "legendFormat": "Time to expiry",
           "refId": "A"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -155,19 +144,18 @@
       },
       "targets": [
         {
-          "expr": "gaf_energy_production_kwh_latest_hour",
+          "expr": "max(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"})",
           "legendFormat": "Current",
           "refId": "A"
         },
         {
-          "expr": "avg_over_time(gaf_energy_production_kwh_latest_hour[7d])",
+          "expr": "max(avg_over_time(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"}[7d]))",
           "legendFormat": "7d avg",
           "refId": "B"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -224,14 +212,13 @@
       },
       "targets": [
         {
-          "expr": "gaf_up",
+          "expr": "max(gaf_up{job=\"gafferstape\"})",
           "legendFormat": "Status",
           "refId": "A"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -283,14 +270,13 @@
       },
       "targets": [
         {
-          "expr": "time() - gaf_last_sample_timestamp_seconds",
+          "expr": "time() - max(gaf_last_sample_timestamp_seconds{job=\"gafferstape\"} > 0)",
           "legendFormat": "Age",
           "refId": "A"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -407,24 +393,23 @@
       },
       "targets": [
         {
-          "expr": "gaf_energy_production_kwh_today",
+          "expr": "max(gaf_energy_production_kwh_today{job=\"gafferstape\"})",
           "legendFormat": "Today",
           "refId": "A"
         },
         {
-          "expr": "gaf_energy_production_kwh_yesterday",
+          "expr": "max(gaf_energy_production_kwh_yesterday{job=\"gafferstape\"})",
           "legendFormat": "Yesterday",
           "refId": "B"
         },
         {
-          "expr": "avg_over_time(gaf_energy_production_kwh_today[7d])",
+          "expr": "max(avg_over_time(gaf_energy_production_kwh_today{job=\"gafferstape\"}[7d]))",
           "legendFormat": "7d avg",
           "refId": "C"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -476,14 +461,13 @@
       },
       "targets": [
         {
-          "expr": "gaf_energy_production_kwh_latest_hour",
+          "expr": "max(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"})",
           "legendFormat": "This hour",
           "refId": "A"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -535,14 +519,13 @@
       },
       "targets": [
         {
-          "expr": "max_over_time(gaf_energy_production_kwh_latest_hour[24h])",
+          "expr": "max(max_over_time(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"}[24h]))",
           "legendFormat": "Peak",
           "refId": "A"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -623,19 +606,18 @@
       },
       "targets": [
         {
-          "expr": "gaf_energy_production_kwh_latest_hour",
+          "expr": "max(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"})",
           "legendFormat": "Hourly",
           "refId": "A"
         },
         {
-          "expr": "max_over_time(gaf_energy_production_kwh_latest_hour[24h])",
+          "expr": "max(max_over_time(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"}[24h]))",
           "legendFormat": "24h peak",
           "refId": "B"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -676,19 +658,18 @@
       },
       "targets": [
         {
-          "expr": "gaf_energy_production_kwh_today",
+          "expr": "max(gaf_energy_production_kwh_today{job=\"gafferstape\"})",
           "legendFormat": "Today (cumulative)",
           "refId": "A"
         },
         {
-          "expr": "gaf_energy_production_kwh_latest_hour",
+          "expr": "max(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"})",
           "legendFormat": "Hourly production",
           "refId": "B"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -728,7 +709,7 @@
       },
       "targets": [
         {
-          "expr": "max_over_time(gaf_energy_production_kwh_today[1d])",
+          "expr": "max(max_over_time(gaf_energy_production_kwh_today{job=\"gafferstape\"}[1d]))",
           "legendFormat": "Daily total",
           "refId": "A",
           "interval": "1d"
@@ -736,14 +717,13 @@
       ],
       "timeFrom": "7d",
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
       "id": 14,
       "title": "Production Heatmap",
-      "description": "Hourly production intensity — reveals peak generation hours and daily patterns.",
+      "description": "Hourly production intensity \u2014 reveals peak generation hours and daily patterns.",
       "type": "heatmap",
       "gridPos": {
         "h": 10,
@@ -781,7 +761,7 @@
       },
       "targets": [
         {
-          "expr": "gaf_energy_production_kwh_latest_hour",
+          "expr": "max(gaf_energy_production_kwh_latest_hour{job=\"gafferstape\"})",
           "legendFormat": "Production",
           "refId": "A",
           "interval": "1h"
@@ -789,8 +769,7 @@
       ],
       "timeFrom": "14d",
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     },
     {
@@ -836,14 +815,13 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(gaf_scrape_errors_total[1h]))",
+          "expr": "sum(increase(gaf_scrape_errors_total{job=\"gafferstape\"}[1h]))",
           "legendFormat": "Errors (last 1h)",
           "refId": "A"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "type": "prometheus"
       }
     }
   ]
