@@ -90,13 +90,14 @@ shows the active selector. The chart's ServiceMonitor needs labels matching it.
 
 ### Cookies updated but pod is still failing auth
 
-Env vars are only read at container start. After updating the Secret, you have to restart the Pod:
+Since v0.2.0 the chart mounts the Secret as files (not env vars), so updates propagate within the kubelet sync interval (~60s) without a Pod restart. If you're still seeing auth failures after that window:
 
-```sh
-kubectl rollout restart deployment/<release>-gafferstape -n <ns>
-```
+1. **Confirm the new Secret values landed.** `kubectl get secret <name> -n <ns> -o jsonpath='{.data.session-token}' | base64 -d | head -c 60` — should be the JWT prefix of your fresh token.
+2. **Confirm the Pod sees them.** `kubectl exec -n <ns> deploy/<release>-gafferstape -- head -c 60 /etc/gafferstape-secrets/session-token` — should match. If the file is missing entirely, the chart wasn't installed at v0.2.0+ or the Secret's key names don't match (`session-token` and `csrf-token`).
+3. **Wait one poll interval.** Default 15m. `/api/state`'s `session_expires_at` is the ground truth.
+4. **If still wrong after step 3:** rule out the pre-v0.2.0 env-var path with `kubectl rollout restart deployment/<release>-gafferstape -n <ns>` — if that fixes it, you're on an older chart and need to `helm upgrade`.
 
-To automate this, install [stakater/reloader](https://github.com/stakater/Reloader) and set `reloader.enabled=true` in the chart values — the controller watches the Secret and triggers the rollout for you.
+For instant propagation rather than waiting up to ~60s, install [stakater/reloader](https://github.com/stakater/Reloader) and set `reloader.enabled=true` in chart values.
 
 ### Pod evicted / OOMKilled
 

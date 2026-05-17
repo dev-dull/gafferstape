@@ -216,9 +216,7 @@ $EDITOR .env
 docker compose up -d   # recreates the container with the new env
 ```
 
-**If you installed via Helm:**
-
-The K8s flow is different because cookies live in a Secret injected as env vars (not in a hot-reloaded file), so a Pod restart is required to pick up rotated cookies:
+**If you installed via Helm (v0.2.0+):**
 
 ```sh
 kubectl create secret generic <your-secret-name> \
@@ -226,11 +224,11 @@ kubectl create secret generic <your-secret-name> \
   --from-literal=session-token=NEW_JWT \
   --from-literal=csrf-token=NEW_CSRF \
   --dry-run=client -o yaml | kubectl apply -f -
-
-kubectl rollout restart deployment/gafferstape --namespace gafferstape
 ```
 
-Set `reloader.enabled=true` in chart values (and install [stakater/reloader](https://github.com/stakater/Reloader)) to automate the rollout — see [`charts/gafferstape/README.md`](../charts/gafferstape/README.md).
+That's it — no `kubectl rollout restart`. The chart mounts the Secret as files, the kubelet refreshes them within ~60s of your `kubectl apply`, and the daemon re-reads them on its next upstream request. For instant propagation, install [stakater/reloader](https://github.com/stakater/Reloader) and set `reloader.enabled=true`.
+
+If you're on a pre-v0.2.0 chart, `helm upgrade` to the current chart version first; the older chart used env-injected Secrets and required `kubectl rollout restart` after every rotation.
 
 Either way, no data loss — Prometheus and Home Assistant pick back up the moment polling resumes.
 

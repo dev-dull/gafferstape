@@ -131,13 +131,11 @@ kubectl create secret generic gafferstape-cookies \
   --from-literal=session-token='NEW_JWT' \
   --from-literal=csrf-token='NEW_CSRF' \
   --dry-run=client -o yaml | kubectl apply -f -
-
-# 3. Restart the Deployment so the new env vars are picked up:
-kubectl rollout restart deployment/gafferstape \
-  --namespace gafferstape
 ```
 
-If `reloader.enabled=true` and stakater/reloader is installed, step 3 is automatic.
+That's it. The Secret is mounted into the Pod as files (not env vars), the kubelet refreshes those files within ~60s of the Secret update, and the daemon re-reads them on its next upstream request. No `kubectl rollout restart` required.
+
+If you'd rather have the rollout happen immediately rather than waiting up to ~60s for the kubelet sync, set `reloader.enabled=true` and install [stakater/reloader](https://github.com/stakater/Reloader) — the controller watches the Secret and triggers a rollout the moment it changes.
 
 ## Uninstall
 
@@ -150,7 +148,8 @@ kubectl delete namespace gafferstape                                 # if empty
 ## Limitations
 
 - **No HA / multi-replica.** Cookies are single-session credentials. Running >1 replica means N pods making duplicate requests with the same auth — wasteful, possibly rate-limit-triggering. `replicaCount` defaults to 1 for this reason.
-- **Token rotation requires a Pod restart** (or stakater/reloader). The daemon supports in-place hot-reload of `config.yaml` token fields, but in Kubernetes the cookies live in a Secret mounted as env vars, which the kubelet only re-reads at container start. The `checksum/config` annotation on the Pod handles ConfigMap edits (poll interval, log level, etc.); Secret changes need the rollout.
+- **ConfigMap changes still require a Pod restart.** The Pod has a `checksum/config` annotation so a `helm upgrade` triggers a rollout when `config.listen` / `config.pollInterval` / `config.logLevel` change. Only **Secret** edits propagate without a restart (via the volume-mount + per-request re-read).
+- **Token rotation lag of up to ~60s.** That's the kubelet's `syncFrequency` for mounted Secrets. For instant propagation, install [stakater/reloader](https://github.com/stakater/Reloader) and set `reloader.enabled=true`.
 - **No CRDs bundled.** ServiceMonitor support requires the Prometheus Operator CRDs to already be installed (typically via kube-prometheus-stack).
 
 ## Validation in CI

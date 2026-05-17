@@ -88,22 +88,37 @@ func run(ctx context.Context, args []string) error {
 	return runServices(ctx, pol, server.New(cfg.Listen, logger, snap), logger)
 }
 
-// buildPoller wires up a hot-reloading FileTokenProvider so the user
-// can rotate cookies without restarting the container: the daemon
-// re-reads the token fields from configPath before every upstream
-// request. The env-var values captured at startup (Config.SessionToken
-// / Config.CSRFToken) act as a fallback when the file's fields are
-// empty, preserving the docker-compose + .env first-run flow.
+// buildPoller wires up a hot-reloading TokenProvider so the user can
+// rotate cookies without restarting the container.
+//
+// Two providers, picked by the GAFFERSTAPE_TOKENS_DIR env var:
+//
+//   - If set, DirTokenProvider reads `session-token` and `csrf-token`
+//     files from that directory on every upstream request. Designed
+//     for Kubernetes Secret volume mounts — the kubelet refreshes the
+//     mounted files when the Secret changes, and we pick that up
+//     within one poll without a Pod restart.
+//
+//   - Otherwise, FileTokenProvider re-reads the session_token /
+//     csrf_token fields from configPath (the YAML config) on every
+//     request, with env-var values captured at startup as a fallback.
+//     This is the docker-compose path.
 //
 // Returns (nil, nil) — /healthz-only mode — when no usable tokens can
-// be resolved from either the file or env vars at startup. A real
-// error is returned only on malformed inputs.
+// be resolved at startup. A real error is returned only on malformed
+// inputs.
 func buildPoller(cfg config.Config, configPath string, logger *slog.Logger) (*poller.Poller, error) {
-	tokenProvider := config.NewFileTokenProvider(configPath, cfg.SessionToken, cfg.CSRFToken)
+	var tokenProvider client.TokenProvider
+	if dir := os.Getenv("GAFFERSTAPE_TOKENS_DIR"); dir != "" {
+		tokenProvider = config.NewDirTokenProvider(dir)
+		logger.Info("using DirTokenProvider for hot-reload from secret volume", "dir", dir)
+	} else {
+		tokenProvider = config.NewFileTokenProvider(configPath, cfg.SessionToken, cfg.CSRFToken)
+	}
 
 	if _, _, err := tokenProvider.Tokens(context.Background()); err != nil {
 		logger.Warn("tokens not configured; running in /healthz-only mode (no upstream polling)",
-			"hint", "set session_token / csrf_token in "+configPath+", or use GAFFERSTAPE_SESSION_TOKEN / GAFFERSTAPE_CSRF_TOKEN env vars",
+			"hint", "set session_token / csrf_token in "+configPath+", or use GAFFERSTAPE_SESSION_TOKEN / GAFFERSTAPE_CSRF_TOKEN env vars, or mount a secret directory and set GAFFERSTAPE_TOKENS_DIR",
 			"err", err,
 		)
 		return nil, nil

@@ -47,16 +47,15 @@ spec:
               containerPort: 9876
               protocol: TCP
           env:
-            - name: GAFFERSTAPE_SESSION_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "gafferstape.secretName" . }}
-                  key: session-token
-            - name: GAFFERSTAPE_CSRF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "gafferstape.secretName" . }}
-                  key: csrf-token
+            # GAFFERSTAPE_TOKENS_DIR switches the daemon to its
+            # DirTokenProvider, which reads session-token + csrf-token
+            # from individual files in this directory on every request.
+            # The directory is a Secret volume mount (see below); the
+            # kubelet refreshes its contents within ~60s of a Secret
+            # update, so rotation is just `kubectl create secret …`
+            # without a Pod restart.
+            - name: GAFFERSTAPE_TOKENS_DIR
+              value: /etc/gafferstape-secrets
           livenessProbe:
             httpGet:
               path: /healthz
@@ -79,10 +78,25 @@ spec:
             - name: config
               mountPath: /etc/gafferstape
               readOnly: true
+            - name: tokens
+              mountPath: /etc/gafferstape-secrets
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: {{ include "gafferstape.fullname" . }}
+        - name: tokens
+          secret:
+            secretName: {{ include "gafferstape.secretName" . }}
+            # Project just the two cookie values as files. The Secret
+            # may have other keys (operators sometimes use a single
+            # Secret per app for everything); the chart's contract is
+            # session-token + csrf-token.
+            items:
+              - key: session-token
+                path: session-token
+              - key: csrf-token
+                path: csrf-token
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
