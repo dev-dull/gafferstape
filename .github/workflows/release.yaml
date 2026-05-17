@@ -77,9 +77,16 @@ jobs:
         id: tags
         run: |
           set -euo pipefail
-          TAGS="${{ steps.meta.outputs.image }}:v${{ steps.meta.outputs.version }}"
+          # Dual-tag for every release:
+          #   :vX.Y.Z — git-tag-aligned form (some users / old README references pull this)
+          #   :X.Y.Z  — Helm/OCI-conventional form; what the Helm chart's appVersion-based
+          #             default resolves to. Both forms point at the same digest, so users
+          #             can pick whichever convention suits them.
+          IMG="${{ steps.meta.outputs.image }}"
+          V="${{ steps.meta.outputs.version }}"
+          TAGS="$IMG:v$V,$IMG:$V"
           if [ "${{ steps.meta.outputs.prerelease }}" = "false" ]; then
-            TAGS="$TAGS,${{ steps.meta.outputs.image }}:latest"
+            TAGS="$TAGS,$IMG:latest"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "::notice::Tags: $TAGS"
