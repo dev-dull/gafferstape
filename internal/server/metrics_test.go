@@ -70,7 +70,7 @@ func TestMetricsTwoProperties(t *testing.T) {
 				State:        "OR",
 				TodayKWh:     12.5,
 				YesterdayKWh: 21.0,
-				LatestHour: poller.HourSample{Time: t0, KWh: 1.31},
+				LatestHour:   poller.HourSample{Time: t0, KWh: 1.31},
 				Inverter: client.Inverter{
 					Manufacturer: "Enphase",
 					ModelNumber:  "IQ8+",
@@ -85,7 +85,7 @@ func TestMetricsTwoProperties(t *testing.T) {
 				State:        "OR",
 				TodayKWh:     7.0,
 				YesterdayKWh: 9.5,
-				LatestHour: poller.HourSample{Time: t0, KWh: 0.42},
+				LatestHour:   poller.HourSample{Time: t0, KWh: 0.42},
 			},
 		},
 	}}
