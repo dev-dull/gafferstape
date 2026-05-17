@@ -4,7 +4,7 @@ Kubernetes install of [gafferstape](https://github.com/dev-dull/gafferstape) —
 
 The Docker Compose flow is still the documented happy path for single-host self-hosters; this chart is the install option for clusters.
 
-> Status: alpha — chart lints and templates cleanly against three value combinations in CI, but has not been deployed to a real cluster yet. The [project status](../../docs/setup.md#status) caveat applies.
+> Status: alpha — chart deployed to a real `kube-prometheus-stack` cluster on 2026-05-17. That deploy caught the `:v0.1.0` vs `:0.1.0` image tag mismatch ([#16](https://github.com/dev-dull/gafferstape/issues/16), since fixed). Prometheus scraping + Grafana dashboard confirmed working against real data. The [project status](../../docs/setup.md#status) caveat applies for the items still unverified (Home Assistant integration, multi-property accounts, ~25-day JWT lifetime).
 
 ## TL;DR
 

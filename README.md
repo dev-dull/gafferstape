@@ -2,7 +2,7 @@
 
 GAFfer's tape for your [GAF Energy](https://www.gaf.energy/) solar data — a small Go daemon that scrapes your `my.gaf.energy` portal and re-exposes the numbers in formats your tools actually speak: **Prometheus** (for Grafana) and **JSON** (for Home Assistant).
 
-> ⚠ **Status: alpha — validated end-to-end on 2026-05-16.** The daemon was confirmed against the live my.gaf.energy API with real cookies: `gaf_up=1`, real production data flowing, JWT expiry tracked, clean halt on auth failure. Long-running behaviour (multi-day, multi-property, Prometheus/HA in actual deployments) hasn't been observed yet. See [docs/setup.md](docs/setup.md#status) for the validated-vs-untested breakdown before relying on this in production.
+> ⚠ **Status: alpha — running in a real Kubernetes cluster as of 2026-05-17.** Validated against the live my.gaf.energy API on 2026-05-16 (real production data, JWT expiry tracking, clean halt on auth failure) and deployed via Helm to a kube-prometheus-stack cluster on 2026-05-17 (Prometheus scrapes confirmed by the [Grafana dashboard](examples/grafana-dashboard.json) built from real data). Still unverified in practice: Home Assistant `rest` sensor parsing `/api/state`, multi-property accounts, and the full ~25-day JWT lifetime. See [docs/setup.md](docs/setup.md#status) for the full validated-vs-untested breakdown.
 
 ## Why
 

@@ -2,22 +2,22 @@
 
 <a id="status"></a>
 
-> ## ⚠ Status: alpha — validated end-to-end on 2026-05-16
+> ## ⚠ Status: alpha — running in a real cluster as of 2026-05-17
 >
 > **Verified working:**
 > - Builds and unit tests pass under the race detector.
-> - The Docker image (~19 MB) runs as a non-root user, reaches `healthy`, and shuts down cleanly on `SIGTERM`.
+> - The Docker image (~19 MB, multi-arch amd64/arm64) runs as a non-root user, reaches `healthy`, and shuts down cleanly on `SIGTERM`.
 > - End-to-end smoke test against live `my.gaf.energy` with real cookies on 2026-05-16: `gaf_up=1`, one property auto-discovered, real `today_kwh` / `yesterday_kwh` / `latest_hour` values flowing, JWT expiry parsed correctly, inverter metadata (Delta M6-TL-US, serial, active flag) detected.
 > - Authentication halts cleanly with `gaf_up=0` and a clear log line when cookies expire (verified with deliberately invalid cookies).
-> - Token hot-reload: editing `config.yaml`'s `session_token` / `csrf_token` propagates to the next upstream call without a daemon restart (unit-tested at the client and poller layers).
-> - The CSRF wire-encoding gotcha that prevented authentication on the first real test is now fixed and locked in by a regression test.
+> - Token hot-reload: editing `config.yaml`'s `session_token` / `csrf_token` propagates to the next upstream call without a daemon restart.
+> - The CSRF wire-encoding gotcha that prevented authentication on the first real test is fixed and locked in by a regression test.
+> - **Helm chart deployed to a real Kubernetes cluster** with `kube-prometheus-stack` on 2026-05-17. That deploy also caught and fixed the `:v0.1.0` vs `:0.1.0` image-tag mismatch (#16).
+> - **Prometheus actually scrapes `/metrics`** in that deployment — confirmed by the real-data Grafana dashboard shipped at [`examples/grafana-dashboard.json`](../examples/grafana-dashboard.json).
 >
 > **Not yet validated in practice:**
-> - Long-running behaviour over the full ~25-day JWT lifetime (only ~10 minutes of real polling observed so far).
-> - Prometheus scraping the `/metrics` endpoint from an actual Prometheus server in a deployment (the endpoint itself is verified by unit tests + manual curl).
-> - Home Assistant's `rest` sensor consuming `/api/state` in an actual HA install (the JSON shape is verified; HA's parsing isn't).
-> - Multi-property accounts (only one-property accounts tested).
-> - The Grafana dashboard ([issue #15](https://github.com/dev-dull/gafferstape/issues/15) — doesn't exist yet).
+> - Long-running behaviour over the full ~25-day JWT lifetime (only minutes of observation so far on either of our deploys).
+> - Home Assistant's `rest` sensor consuming `/api/state` in an actual HA install. The JSON shape is verified by unit tests and the schema works in Grafana, but no one has wired `examples/homeassistant.yaml` into a real HA configuration yet.
+> - Multi-property accounts (only single-property tested).
 >
 > If something doesn't match the description here, **that is a bug** — file it at https://github.com/dev-dull/gafferstape/issues with a redacted log excerpt and the output of `curl localhost:9876/api/state`.
 
