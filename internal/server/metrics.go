@@ -109,7 +109,13 @@ func (c *gafCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, p := range s.Properties {
 		addr := formatAddress(p.Street, p.City, p.State)
-		ch <- prometheus.MustNewConstMetric(descLastSample, prometheus.GaugeValue, float64(p.LastSampleAt.Unix()), p.ID)
+		// Skip the metric entirely when we have no observed sample yet.
+		// Emitting time.Time{}.Unix() yields -62135596800 (Jan 1 year 1),
+		// which corrupts every Grafana panel doing `time() - X` against
+		// it. Absent semantics matches the gaf_inverter_info pattern.
+		if !p.LatestHour.Time.IsZero() {
+			ch <- prometheus.MustNewConstMetric(descLastSample, prometheus.GaugeValue, float64(p.LatestHour.Time.Unix()), p.ID)
+		}
 		ch <- prometheus.MustNewConstMetric(descLatestHour, prometheus.GaugeValue, p.LatestHour.KWh, p.ID, addr)
 		ch <- prometheus.MustNewConstMetric(descToday, prometheus.GaugeValue, p.TodayKWh, p.ID, addr)
 		ch <- prometheus.MustNewConstMetric(descYesterday, prometheus.GaugeValue, p.YesterdayKWh, p.ID, addr)

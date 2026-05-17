@@ -360,7 +360,6 @@ func (p *Poller) pollProperty(ctx context.Context, prop client.Property, now tim
 
 	var todayTotal float64
 	var latest HourSample
-	var lastSampleAt time.Time
 	respLoc, _ := hourly.Location() // may fail; we fall back to the property's loc
 	if respLoc == nil {
 		respLoc = loc
@@ -373,9 +372,6 @@ func (p *Poller) pollProperty(ctx context.Context, prop client.Property, now tim
 		}
 		if t.After(latest.Time) {
 			latest = HourSample{Time: t, KWh: s.Value}
-		}
-		if t.After(lastSampleAt) {
-			lastSampleAt = t
 		}
 	}
 
@@ -412,7 +408,6 @@ func (p *Poller) pollProperty(ctx context.Context, prop client.Property, now tim
 		TodayKWh:     todayTotal,
 		YesterdayKWh: yesterdayKWh,
 		LatestHour:   latest,
-		LastSampleAt: lastSampleAt,
 	}, nil
 }
 

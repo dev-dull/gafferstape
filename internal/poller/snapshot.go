@@ -56,11 +56,10 @@ type PropertySnapshot struct {
 	// the first tick after local midnight until the next.
 	YesterdayKWh float64
 	// LatestHour is the most recent hourly bucket; zero value if no
-	// production has been reported yet today.
+	// production has been reported yet today. LatestHour.Time is the
+	// single source of truth for "newest bucket timestamp" — exposed
+	// as gaf_last_sample_timestamp_seconds in /metrics.
 	LatestHour HourSample
-	// LastSampleAt is the timestamp of the newest bucket we've seen,
-	// in the property's local timezone.
-	LastSampleAt time.Time
 }
 
 // HourSample is one production bucket: KWh produced during the hour

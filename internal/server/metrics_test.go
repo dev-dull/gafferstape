@@ -70,8 +70,7 @@ func TestMetricsTwoProperties(t *testing.T) {
 				State:        "OR",
 				TodayKWh:     12.5,
 				YesterdayKWh: 21.0,
-				LatestHour:   poller.HourSample{Time: t0, KWh: 1.31},
-				LastSampleAt: t0,
+				LatestHour: poller.HourSample{Time: t0, KWh: 1.31},
 				Inverter: client.Inverter{
 					Manufacturer: "Enphase",
 					ModelNumber:  "IQ8+",
@@ -86,8 +85,7 @@ func TestMetricsTwoProperties(t *testing.T) {
 				State:        "OR",
 				TodayKWh:     7.0,
 				YesterdayKWh: 9.5,
-				LatestHour:   poller.HourSample{Time: t0, KWh: 0.42},
-				LastSampleAt: t0,
+				LatestHour: poller.HourSample{Time: t0, KWh: 0.42},
 			},
 		},
 	}}
@@ -178,6 +176,31 @@ func TestMetricsEmptyPropertiesNoSeries(t *testing.T) {
 	mustNotContain(t, body, "gaf_energy_production_kwh_today")
 	mustNotContain(t, body, "gaf_energy_production_kwh_yesterday")
 	mustNotContain(t, body, "gaf_inverter_info")
+}
+
+// Regression for #18: when a property is present but no hourly bucket
+// has been observed yet (zero LatestHour.Time), the timestamp metric
+// must be ABSENT, not emit time.Time{}.Unix() = -62135596800.
+func TestMetricsLastSampleAbsentWhenNoBucket(t *testing.T) {
+	snap := &fakeSnap{s: poller.Snapshot{
+		OK: true,
+		Properties: []poller.PropertySnapshot{
+			{
+				ID:       "prop-no-data",
+				Street:   "1 Way",
+				City:     "Town",
+				State:    "CA",
+				TodayKWh: 0,
+				// LatestHour.Time is the zero value — no buckets observed.
+			},
+		},
+	}}
+	_, body := fetchMetrics(t, snap)
+	// The corrupt sentinel must not appear anywhere.
+	mustNotContain(t, body, "-62135596800")
+	// And the metric must be absent for this property (Prometheus
+	// "no data" semantics rather than "year 0").
+	mustNotContain(t, body, `gaf_last_sample_timestamp_seconds{property_id="prop-no-data"}`)
 }
 
 func TestMetricsRejectsPOST(t *testing.T) {
