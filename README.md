@@ -49,7 +49,7 @@ The image is published to GHCR at `ghcr.io/dev-dull/gafferstape` — by default 
    curl http://localhost:9876/api/state     # JSON snapshot
    curl http://localhost:9876/metrics       # Prometheus text
    ```
-5. Point Prometheus at `http://localhost:9876/metrics`, or wire Home Assistant to `/api/state` using [examples/homeassistant.yaml](examples/homeassistant.yaml). Sample alert rules in [examples/alerts.yaml](examples/alerts.yaml).
+5. Point Prometheus at `http://localhost:9876/metrics`, or wire Home Assistant to `/api/state` using [examples/homeassistant.yaml](examples/homeassistant.yaml). Sample alert rules in [examples/alerts.yaml](examples/alerts.yaml). Ready-to-import Grafana dashboard in [examples/grafana-dashboard.json](examples/grafana-dashboard.json).
 
 Cookies expire about every 25 days. Watch `gaf_session_expires_at_timestamp_seconds` (Grafana renders it as a date) or the `session_expires_at` field in `/api/state`, and edit `config.yaml` before they die.
 

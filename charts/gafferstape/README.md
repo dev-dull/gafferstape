@@ -102,6 +102,10 @@ helm install gaf ./charts/gafferstape \
 
 > Note: the cookie values end up in the Helm release history; rotate them before treating this install as anything other than throwaway.
 
+### Grafana dashboard
+
+Once `serviceMonitor.enabled=true` and Prometheus is scraping, import [`examples/grafana-dashboard.json`](../../examples/grafana-dashboard.json) into Grafana via **Dashboards → Import**. Twelve panels, including the session-expiry countdown and a 14-day production heatmap. Built and validated against a real `kube-prometheus-stack` deployment.
+
 ### Auto-rollout on Secret update via reloader
 
 ```sh

@@ -126,7 +126,15 @@ scrape_configs:
 
 `30s` is fine — the daemon caches its poll result, so scraping faster than the upstream cadence costs nothing real but slightly noisier dashboards. Don't go below the default 15s; it doesn't buy anything.
 
-## 5. Grafana / PromQL starter queries
+## 5. Grafana
+
+A ready-to-import dashboard ships at [`examples/grafana-dashboard.json`](../examples/grafana-dashboard.json). Grafana → **Dashboards** → **New** → **Import** → upload the JSON or paste its contents → pick your Prometheus data source when prompted. Twelve panels organised into four rows: status (session TTL, current generation gauge, UP/DOWN, last sample age, scrape error count), production (today vs yesterday vs 7-day average, current hour, peak today), history (full-width cumulative + hourly), and trends (weekly bar chart, 14-day production heatmap).
+
+The dashboard was built against a real cluster on 2026-05-17 (commit ships with the JSON).
+
+### Starter PromQL queries (fallback)
+
+If you'd rather build panels manually, these are the highest-value queries:
 
 For a panel of type "Time series" or "Stat":
 
