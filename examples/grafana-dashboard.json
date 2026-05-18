@@ -675,7 +675,7 @@
     {
       "id": 13,
       "title": "Weekly Production",
-      "description": "Daily production totals over the past 7 days.",
+      "description": "Daily totals over the past 7 completed days. Today is excluded — see the Daily Production panel for in-progress production.",
       "type": "timeseries",
       "gridPos": {
         "h": 10,
@@ -709,8 +709,8 @@
       },
       "targets": [
         {
-          "expr": "max(max_over_time(gaf_energy_production_kwh_today{job=\"gafferstape\"}[1d]))",
-          "legendFormat": "Daily total",
+          "expr": "max(gaf_energy_production_kwh_yesterday{job=\"gafferstape\"})",
+          "legendFormat": "Daily total (completed days)",
           "refId": "A",
           "interval": "1d"
         }
@@ -723,7 +723,7 @@
     {
       "id": 14,
       "title": "Production Heatmap",
-      "description": "Hourly production intensity — reveals peak generation hours and daily patterns.",
+      "description": "Hourly production intensity over the past 7 days. Reveals peak generation hours and weather patterns. Extend the time range via the time picker for more history once you have it.",
       "type": "heatmap",
       "gridPos": {
         "h": 10,
@@ -767,7 +767,7 @@
           "interval": "1h"
         }
       ],
-      "timeFrom": "14d",
+      "timeFrom": "7d",
       "datasource": {
         "type": "prometheus"
       }
