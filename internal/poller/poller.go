@@ -297,6 +297,11 @@ func (p *Poller) pollOnce(ctx context.Context, now time.Time) {
 // checkSessionExpiry inspects the JWT exp claim and logs accordingly.
 // Returns false (poll should NOT proceed) when the token is already
 // expired; in that case it also sets AuthFailed so Run halts cleanly.
+//
+// Thresholds are tuned to the GAF Energy JWT's observed ~24h lifetime
+// (not the 25 days we initially assumed). The earlier 7d/24h thresholds
+// produced uninterruptible noise — every poll cycle of a freshly-issued
+// token already qualified as "<7d remaining."
 func (p *Poller) checkSessionExpiry(now time.Time) bool {
 	if p.sessionExpiresAt.IsZero() {
 		return true // couldn't parse JWT; nothing to enforce
@@ -307,14 +312,14 @@ func (p *Poller) checkSessionExpiry(now time.Time) bool {
 		p.authFailed = true
 		p.recordTickFailure(now, fmt.Errorf("session token expired at %s; paste fresh cookies and restart", p.sessionExpiresAt.Format(time.RFC3339)))
 		return false
-	case until < 24*time.Hour:
+	case until < 1*time.Hour:
 		p.logger.Error("session expires very soon",
 			"in", until.Round(time.Minute).String(),
 			"at", p.sessionExpiresAt.Format(time.RFC3339),
 		)
-	case until < 7*24*time.Hour:
+	case until < 6*time.Hour:
 		p.logger.Warn("session expires soon",
-			"in", until.Round(time.Hour).String(),
+			"in", until.Round(time.Minute).String(),
 			"at", p.sessionExpiresAt.Format(time.RFC3339),
 		)
 	}

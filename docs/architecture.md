@@ -5,7 +5,7 @@ This document is the source of truth for how GAFfersTape is put together. If the
 ## Goals
 
 - Get solar production numbers out of `my.gaf.energy` and into Prometheus and Home Assistant.
-- Survive long-lived operation: ~25-day JWT, ~15-minute upstream update cadence.
+- Survive long-lived operation: ~24h JWT (forces roughly daily cookie rotation), ~15-minute upstream update cadence.
 - Be honest about what we don't get: no per-panel data, no battery state (the portal API doesn't expose them).
 
 ## Non-goals
@@ -134,7 +134,8 @@ Token rotation in Kubernetes is **not hot-reload** — the kubelet only re-reads
 |---|---|---|
 | Upstream 5xx | HTTP status | Increment `gaf_scrape_errors_total`, keep cache, retry next tick. |
 | Upstream 401/403 | HTTP status | Set `gaf_up=0`, log error, do not retry until session is refreshed. |
-| JWT expiring soon | `exp` claim < 7d | Log warn each poll; `gaf_session_expires_seconds` exposes it for alerting. |
+| JWT expiring soon | `exp` claim < 6h | Log warn each poll; `gaf_session_expires_seconds` exposes it for alerting. |
+| JWT expiring imminently | `exp` claim < 1h | Log error each poll; same metric for alerting. |
 | JWT already expired | `exp` claim in past | `gaf_up=0`, refuse to poll, log loud. |
 | Network timeout | Context deadline | Same as 5xx. |
 | Config missing cookies | Startup check | Log warning; run in /healthz-only mode (poller disabled). Lets ops verify the deployment before adding credentials. |

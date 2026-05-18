@@ -4,7 +4,7 @@ Kubernetes install of [gafferstape](https://github.com/dev-dull/gafferstape) —
 
 The Docker Compose flow is still the documented happy path for single-host self-hosters; this chart is the install option for clusters.
 
-> Status: alpha — chart deployed to a real `kube-prometheus-stack` cluster on 2026-05-17. That deploy caught the `:v0.1.0` vs `:0.1.0` image tag mismatch ([#16](https://github.com/dev-dull/gafferstape/issues/16), since fixed). Prometheus scraping + Grafana dashboard confirmed working against real data. The [project status](../../docs/setup.md#status) caveat applies for the items still unverified (Home Assistant integration, multi-property accounts, ~25-day JWT lifetime).
+> Status: alpha — chart deployed to a real `kube-prometheus-stack` cluster on 2026-05-17. That deploy caught the `:v0.1.0` vs `:0.1.0` image tag mismatch ([#16](https://github.com/dev-dull/gafferstape/issues/16), since fixed). Prometheus scraping + Grafana dashboard confirmed working against real data. The [project status](../../docs/setup.md#status) caveat applies for the items still unverified (Home Assistant integration, multi-property accounts). Note: live testing in 2026-05-18 corrected the JWT lifetime from the bootstrap-time assumption of ~25 days to the actual ~24h — v0.2.1 retuned the alert / dashboard thresholds accordingly.
 
 ## TL;DR
 
@@ -117,7 +117,7 @@ Requires [stakater/reloader](https://github.com/stakater/Reloader) installed clu
 
 ## Cookie rotation
 
-The session JWT expires roughly 25 days after login. Watch `gaf_session_expires_at_timestamp_seconds` (Prometheus) or the `session_expires_at` field in `/api/state` (Home Assistant) and rotate before it dies. The Prometheus alert `GafferstapeSessionExpiringSoon` in [examples/alerts.yaml](../../examples/alerts.yaml) fires 3 days out.
+The session JWT expires roughly 24 hours after login (live testing in 2026-05-18 contradicted the original "~25 days" bootstrap-time assumption — see [docs/setup.md §7](../../docs/setup.md#7-cookie-lifetime-and-rotation)). Watch `gaf_session_expires_at_timestamp_seconds` (Prometheus) or the `session_expires_at` field in `/api/state` (Home Assistant) and rotate before it dies. The Prometheus alert `GafferstapeSessionExpiringSoon` in [examples/alerts.yaml](../../examples/alerts.yaml) fires 6 hours out.
 
 ### Rotation procedure
 

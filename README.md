@@ -2,7 +2,7 @@
 
 GAFfer's tape for your [GAF Energy](https://www.gaf.energy/) solar data — a small Go daemon that scrapes your `my.gaf.energy` portal and re-exposes the numbers in formats your tools actually speak: **Prometheus** (for Grafana) and **JSON** (for Home Assistant).
 
-> ⚠ **Status: alpha — running in a real Kubernetes cluster as of 2026-05-17.** Validated against the live my.gaf.energy API on 2026-05-16 (real production data, JWT expiry tracking, clean halt on auth failure) and deployed via Helm to a kube-prometheus-stack cluster on 2026-05-17 (Prometheus scrapes confirmed by the [Grafana dashboard](examples/grafana-dashboard.json) built from real data). Still unverified in practice: Home Assistant `rest` sensor parsing `/api/state`, multi-property accounts, and the full ~25-day JWT lifetime. See [docs/setup.md](docs/setup.md#status) for the full validated-vs-untested breakdown.
+> ⚠ **Status: alpha — running in a real Kubernetes cluster as of 2026-05-17.** Validated against the live my.gaf.energy API on 2026-05-16 (real production data, JWT expiry tracking, clean halt on auth failure) and deployed via Helm to a kube-prometheus-stack cluster on 2026-05-17 (Prometheus scrapes confirmed by the [Grafana dashboard](examples/grafana-dashboard.json) built from real data). Still unverified in practice: Home Assistant `rest` sensor parsing `/api/state` and multi-property accounts. (Heads-up: the original docs assumed a ~25-day JWT, but the GAF backend actually mints ~24h JWTs — see [docs/setup.md §7](docs/setup.md#7-rotating-cookies). v0.2.1 retuned alerts and dashboards accordingly.) See [docs/setup.md](docs/setup.md#status) for the full validated-vs-untested breakdown.
 
 ## Why
 
@@ -10,7 +10,7 @@ The `my.gaf.energy` portal shows you pretty charts and nothing else. There is no
 
 ## What it does
 
-- **Authenticates** to the GAF Energy customer portal using session cookies you paste in (one-time setup, refreshed every few weeks).
+- **Authenticates** to the GAF Energy customer portal using session cookies you paste in (one-time setup, refreshed roughly daily — GAF mints ~24h JWTs).
 - **Polls** the production endpoint on a sane interval (~15 min, matching upstream cadence).
 - **Exposes** the data in two shapes:
   - `GET /metrics` — Prometheus text format, ready for any Prometheus server or Grafana Agent to scrape.
@@ -51,7 +51,7 @@ The image is published to GHCR at `ghcr.io/dev-dull/gafferstape` — by default 
    ```
 5. Point Prometheus at `http://localhost:9876/metrics`, or wire Home Assistant to `/api/state` using [examples/homeassistant.yaml](examples/homeassistant.yaml). Sample alert rules in [examples/alerts.yaml](examples/alerts.yaml). Ready-to-import Grafana dashboard in [examples/grafana-dashboard.json](examples/grafana-dashboard.json).
 
-Cookies expire about every 25 days. Watch `gaf_session_expires_at_timestamp_seconds` (Grafana renders it as a date) or the `session_expires_at` field in `/api/state`, and edit `config.yaml` before they die.
+Cookies expire about every 24 hours (the GAF backend mints ~24h JWTs, not the ~25 days the original docs claimed). Watch `gaf_session_expires_at_timestamp_seconds` (Grafana renders it as a date) or the `session_expires_at` field in `/api/state`, and edit `config.yaml` before they die.
 
 ## Kubernetes (Helm)
 

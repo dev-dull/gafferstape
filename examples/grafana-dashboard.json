@@ -23,7 +23,7 @@
     {
       "id": 1,
       "title": "Session Expires In",
-      "description": "Time remaining before GAF Energy session cookies expire. Tokens must be manually rotated ~every 25 days.",
+      "description": "Time remaining before GAF Energy session cookies expire. GAF mints ~24h JWTs, so tokens must be manually rotated roughly daily.",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -47,15 +47,15 @@
               },
               {
                 "color": "orange",
-                "value": 259200
+                "value": 3600
               },
               {
                 "color": "yellow",
-                "value": 604800
+                "value": 14400
               },
               {
                 "color": "green",
-                "value": 1209600
+                "value": 43200
               }
             ]
           },

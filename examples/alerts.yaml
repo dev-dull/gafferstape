@@ -17,14 +17,14 @@ groups:
             gaf_up has been 0 for at least 10 minutes. Check the daemon logs
             and confirm the cookies haven't expired. See docs/troubleshooting.md.
 
-      # Session JWT will expire within 3 days. Plenty of headroom to
-      # re-do the Firefox cookie copy without rushing.
+      # Session JWT will expire within 6 hours. GAF mints ~24h JWTs, so
+      # this is the practical "you need to rotate today" window.
       - alert: GafferstapeSessionExpiringSoon
-        expr: gaf_session_expires_seconds > 0 and gaf_session_expires_seconds < 86400 * 3
+        expr: gaf_session_expires_seconds > 0 and gaf_session_expires_seconds < 3600 * 6
         labels:
           severity: warning
         annotations:
-          summary: "gafferstape cookies expire in <3 days"
+          summary: "gafferstape cookies expire in <6 hours"
           description: |
             Rotate cookies per docs/setup.md before the JWT dies. Current
             value: {{ humanizeDuration $value }}.

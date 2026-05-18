@@ -688,7 +688,7 @@ func TestRetryRespectsContextCancellation(t *testing.T) {
 
 // ---------- Session expiry ----------
 
-func TestSessionExpiryWarnsBelow7Days(t *testing.T) {
+func TestSessionExpiryWarnsBelow6Hours(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
@@ -696,7 +696,7 @@ func TestSessionExpiryWarnsBelow7Days(t *testing.T) {
 	api := newFake()
 	p := newTestPoller(t, api, func(c *Config) {
 		c.Logger = logger
-		c.SessionToken = makeJWT(t, now.Add(5*24*time.Hour)) // 5 days out
+		c.SessionToken = makeJWT(t, now.Add(3*time.Hour)) // 3h out — inside <6h warn window
 	})
 	p.pollOnce(context.Background(), now)
 
@@ -706,7 +706,7 @@ func TestSessionExpiryWarnsBelow7Days(t *testing.T) {
 	}
 }
 
-func TestSessionExpiryErrorsBelow24h(t *testing.T) {
+func TestSessionExpiryErrorsBelow1Hour(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
@@ -714,7 +714,7 @@ func TestSessionExpiryErrorsBelow24h(t *testing.T) {
 	api := newFake()
 	p := newTestPoller(t, api, func(c *Config) {
 		c.Logger = logger
-		c.SessionToken = makeJWT(t, now.Add(6*time.Hour)) // 6h out
+		c.SessionToken = makeJWT(t, now.Add(30*time.Minute)) // 30m out — inside <1h error window
 	})
 	p.pollOnce(context.Background(), now)
 

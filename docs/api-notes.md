@@ -26,14 +26,14 @@ Success response sets two cookies:
 
 | Cookie | Format | Purpose |
 |---|---|---|
-| `Session-Token` | JWT (HS256), `exp` ~25 days out | Auth |
+| `Session-Token` | JWT (HS256), `exp` ~24h out | Auth |
 | `CSRF-Token` | URL-encoded opaque string | CSRF protection on state-changing requests |
 
 The JWT issuer is `gafe-cp-be-prod`; payload includes `homeowner_id`, `homeowner_email`, `homeowner_contact_id` (Salesforce IDs), `login_type`, `exp`, `iss`, `aud`. We don't verify the signature — we only base64-decode to read `exp`.
 
 ### Why we don't automate login
 
-reCAPTCHA v3 is mandatory on the login form. Automating it requires either a paid solver (2Captcha et al — costs money per solve, fragile against reCAPTCHA updates) or a headed browser the user interacts with anyway. Manual cookie paste every ~3 weeks is the least-bad option for a self-hosted tool.
+reCAPTCHA v3 is mandatory on the login form. Automating it requires either a paid solver (2Captcha et al — costs money per solve, fragile against reCAPTCHA updates) or a headed browser the user interacts with anyway. The original assumption was that manual cookie paste every ~3 weeks would be the least-bad option, but the JWT actually expires roughly every 24h — see §"What the lifetime really is" below. That makes the friction higher than originally hoped, but the conclusion is the same: there's no automatic path that doesn't involve a real browser.
 
 ## Endpoints we care about
 
@@ -141,9 +141,29 @@ Two experiments aimed at the question "can we avoid manual cookie rotation?" Bot
 
 ### Implications
 
-- **Manual cookie rotation every ~25 days is permanent**, absent GAF changing their API. There is no API-level escape hatch.
+- **Manual cookie rotation roughly every 24h is permanent**, absent GAF changing their API. There is no API-level escape hatch. (See §"What the JWT lifetime really is" below — the originally documented "~25 days" was the bootstrap-time guess from the HAR, not the empirical lifetime.)
 - `gaf_session_expires_seconds` and the rotation flow in `docs/setup.md` §7 are the durable answer.
 - A browser-mediated approach (browser extension exporting cookies, or `chromedp` driving a real Chromium through login) is the only remaining auto-refresh option. The first is reasonable for end users; the second is currently a non-goal (see [issue #14](https://github.com/dev-dull/gafferstape/issues/14)).
+
+## What the JWT lifetime really is (2026-05-18)
+
+The bootstrap-time guess from the original HAR analysis was "~25 days" — based on a `Set-Cookie: Max-Age` value or similar cookie attribute. **The actual JWT `exp` is ~24h from login.** Confirmed two ways:
+
+1. Decoded the live Session-Token JWT base64 payload: `exp - now ≈ 20.74h` for a freshly-issued token (no `iat` claim is included, so we infer `iat = exp - 24h`).
+2. The `/api/state` endpoint's `session_expires_at` matches the decoded JWT exactly, and the user observed that "regardless of what I do (explicit logout, login from a private browsing session) the longest credentials live for is about 1.5 days." Three sessions in a row, all ≤36h before going stale.
+
+The "25 days" likely came from the cookie's `Max-Age` attribute (the browser's container expiry) rather than the JWT's `exp` claim. The browser would happily keep the cookie around for 25 days, but the server stops honoring it after ~24h.
+
+v0.2.1 retuned alerts and dashboard thresholds accordingly: WARN at <6h remaining, ERROR at <1h, alert fires at <6h. The earlier 7d-warn / 24h-error / 3d-alert thresholds produced uninterruptible noise because *every freshly-issued token* qualified as "<7d remaining."
+
+### Login POST body shape (corrected)
+
+While re-investigating the lifetime claim we also re-read the original HAR more carefully and noticed two field-naming mistakes that had propagated through the experiment scripts:
+
+- The POST body field is **`emailAddress`** (not `email`). The `email` form gets a generic 401.
+- The reCAPTCHA token rides as the **`x-recaptcha-response` HTTP header**, not as a `recaptchaToken` body field.
+
+Re-running Experiment 2 with the corrected shape (`emailAddress` body, no `x-recaptcha-response` header) still returned the same generic 401, so the conclusion above is unchanged — but record the correct field names here for anyone tempted to probe again.
 
 ## Gotchas
 
