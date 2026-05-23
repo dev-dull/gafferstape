@@ -675,7 +675,7 @@
     {
       "id": 13,
       "title": "Weekly Production",
-      "description": "Daily totals over the past 7 completed days. Today is excluded — see the Daily Production panel for in-progress production.",
+      "description": "Daily kWh totals over the past 7 completed days. Each step holds a single day's value; the marker sits at the start of that day. Today is excluded — see the Daily Production panel for in-progress production.",
       "type": "timeseries",
       "gridPos": {
         "h": 10,
@@ -686,22 +686,29 @@
       "fieldConfig": {
         "defaults": {
           "unit": "kwatth",
+          "min": 0,
           "color": {
             "fixedColor": "green",
             "mode": "fixed"
           },
           "custom": {
-            "lineWidth": 0,
-            "fillOpacity": 80,
-            "drawStyle": "bars",
-            "gradientMode": "scheme",
-            "barAlignment": 0
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "showPoints": "always",
+            "pointSize": 9,
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
           }
         }
       },
       "options": {
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none"
         },
         "legend": {
           "displayMode": "hidden"
